@@ -1,5 +1,5 @@
 {
   "name": "architecture-diagram",
   "description": "Turns a system-architecture request into an editable one-page A3 Visio (.vsdx) with the team's fixed footer and cable colours.",
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
