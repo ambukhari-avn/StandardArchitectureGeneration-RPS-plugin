@@ -26,7 +26,7 @@
    "part_number": "Dell Poweredge R750",
    "confidence": null,
    "image_file_name": null,
-   "picture": null,
+   "picture": "icons/historian_application_server.png",
    "duplicate_of": null,
    "source_row": 3
   },
@@ -52,7 +52,7 @@
    "part_number": "Monitor + tower PC",
    "confidence": "Generic",
    "image_file_name": "generic_monitor-tower-pc.png",
-   "picture": null,
+   "picture": "icons/client_operator_workstation.png",
    "duplicate_of": null,
    "source_row": 5
   },
@@ -65,7 +65,7 @@
    "part_number": "Laptop",
    "confidence": "Generic",
    "image_file_name": "generic_laptop.png",
-   "picture": null,
+   "picture": "icons/engineering_workstation.png",
    "duplicate_of": null,
    "source_row": 6
   },
@@ -78,7 +78,7 @@
    "part_number": "Database cylinder icon",
    "confidence": "Icon",
    "image_file_name": "generic_database-cylinder-icon.png",
-   "picture": null,
+   "picture": "icons/historian_database.png",
    "duplicate_of": null,
    "source_row": 7
   },
@@ -91,7 +91,7 @@
    "part_number": "6GK5615-0AA00-2AA2 (SCALANCE S615)",
    "confidence": "Exact order no.",
    "image_file_name": "siemens_6gk5615-0aa00-2aa2.png",
-   "picture": null,
+   "picture": "icons/industrial_firewall.png",
    "duplicate_of": null,
    "source_row": 8
   },
@@ -104,7 +104,7 @@
    "part_number": "Dell FPM185",
    "confidence": null,
    "image_file_name": null,
-   "picture": null,
+   "picture": "icons/kvm_switch.png",
    "duplicate_of": null,
    "source_row": 9
   },
@@ -117,7 +117,7 @@
    "part_number": "QNAP TS-431K-44R-US",
    "confidence": null,
    "image_file_name": null,
-   "picture": null,
+   "picture": "icons/nas_server.png",
    "duplicate_of": null,
    "source_row": 10
   },
@@ -130,7 +130,7 @@
    "part_number": "SRT1000XLI",
    "confidence": null,
    "image_file_name": null,
-   "picture": null,
+   "picture": "icons/ups.png",
    "duplicate_of": null,
    "source_row": 11
   },
@@ -143,7 +143,7 @@
    "part_number": "X55745dn",
    "confidence": null,
    "image_file_name": null,
-   "picture": null,
+   "picture": "icons/printer.png",
    "duplicate_of": null,
    "source_row": 12
   },
@@ -156,7 +156,7 @@
    "part_number": "NLU-FXXUXXR-24",
    "confidence": null,
    "image_file_name": null,
-   "picture": null,
+   "picture": "icons/patch_panel.png",
    "duplicate_of": null,
    "source_row": 13
   },
@@ -169,7 +169,7 @@
    "part_number": "DTS 4135",
    "confidence": null,
    "image_file_name": null,
-   "picture": null,
+   "picture": "icons/gps_nas_server.png",
    "duplicate_of": null,
    "source_row": 14
   },
@@ -260,7 +260,7 @@
    "part_number": "6ES7155-6AU01-0BN0 (ET 200SP IM 155-6 PN ST)",
    "confidence": "Exact order no.",
    "image_file_name": "siemens_6es7155-6au01-0bn0.png",
-   "picture": null,
+   "picture": "icons/remote_i_o_interface.png",
    "duplicate_of": null,
    "source_row": 21
   },
@@ -351,7 +351,7 @@
    "part_number": "BMECRA31210 (X80 EIO adapter)",
    "confidence": "Exact order no.",
    "image_file_name": "schneider_bmecra31210.png",
-   "picture": null,
+   "picture": "icons/remote_i_o_drop.png",
    "duplicate_of": null,
    "source_row": 28
   },
@@ -377,7 +377,7 @@
    "part_number": "AC500-S safety CPU",
    "confidence": "Model name (order no. is configurable)",
    "image_file_name": "abb_ac500-s-safety-cpu.png",
-   "picture": null,
+   "picture": "icons/safety_plc_abb.png",
    "duplicate_of": null,
    "source_row": 30
   },

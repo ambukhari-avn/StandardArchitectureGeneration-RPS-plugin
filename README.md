@@ -1,60 +1,38 @@
-# Architecture diagram generator (Claude plugin)
+# Architecture diagram generator (ChatGPT and Claude plugin)
 
-Generates a one-page A3 Purdue-model architecture diagram as an editable Visio `.vsdx` from a project BOQ.
-Claude decides *what* goes in the diagram (a structured spec). Fixed, tested code validates the spec, lays it out
-and writes the file. No model draws, positions or spells anything.
+Turns an engineer's prompt (optionally with an RFQ or BOQ attached) into an editable one-page A3 Visio `.vsdx`.
+ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. Only two things are fixed, so they are the same for
+every diagram the team makes: the **footer** (title block, notes, legend) and the **cable colours** (from the client's drawing
+instructions). Everything else is free-form (decision D43).
 
-**Status: Phase 2 (data layer) done.** Built: the footer, the `.vsdx` writer, a plugin skeleton whose `/arch:arch` command
-currently builds a footer-only page, the component dataset (85 rows imported, 23 with pictures), the Purdue map, the cable
-table, picture/box drawing, and exact BOQ-to-component matching with a report. Not built yet: the full BOQ parser, the spec,
-layout, cable routing. See `docs/decisions.md`, `docs/open-questions.md` and `docs/dataset-import-report.md`.
+## Install
+- **ChatGPT:** create a custom GPT with `chatgpt-plugin/instructions.md` as its instructions and `arch_plugin.zip` plus the client's Word
+  document as knowledge, with Code Interpreter on. Steps in [docs/setup.md](docs/setup.md).
+- **Claude (Claude Code / desktop app), needs Python 3:**
+  ```
+  /plugin marketplace add ambukhari-avn/StandardArchitectureGeneration-RPS-_plugin
+  /plugin install architecture-diagram@rps-architecture
+  ```
 
 ## Layout
 ```
-.claude-plugin/plugin.json   plugin manifest
-skills/arch/SKILL.md         the /arch:arch command
-skills/arch/instructions.md  do / don't rules (provisional until the client's file arrives)
-hooks/                       hooks (Phase 6)
-scripts/                     Python standard library only:
-                             vsdx_writer, footer, footer_form, textfit, draw        writing the page
-                             xlsx_reader, import_dataset, components, purdue, cables   data layer
-                             boq_lines, matching, match_report                      BOQ matching
-                             catalogue (dev check), make_base (one-off)
-scripts/spike/               reference-only first spike; hard-coded paths; not part of the runtime
-data/                        components.json + icons/ (imported dataset), purdue_map.json, cable_types.json,
-                             aliases.json (confirmed BOQ wording; empty), footer_form.json
-base/                        avanceon_logo.png, base.vsdx (empty A3 page on a Visio-made package skeleton)
-samples/  tests/  docs/
+chatgpt-plugin/   instructions.md (paste into ChatGPT), make_package.py (builds arch_plugin.zip; also rewrites the Claude skill), README
+.claude-plugin/   Claude plugin + marketplace manifests;  skills/architecture-diagram/SKILL.md (generated from instructions.md)
+scripts/          Python standard library only:
+                  build_diagram.py   diagram.json -> .vsdx (the one command ChatGPT runs)
+                  vsdx_writer, footer, footer_form, textfit, draw, cables, components   writing the page
+                  import_dataset, xlsx_reader   refresh the component library from the dataset workbook (development)
+                  dev_preview       PNG preview, needs Pillow (development)
+data/             cable_types.json, footer_form.json, components.json + icons/ (library pictures)
+base/             avanceon_logo.png, base.vsdx (empty A3 page on a Visio-made package skeleton)
+samples/          diagram_example.json
+docs/             setup.md (ChatGPT and Claude setup), diagram-format.md (the JSON format), decisions.md, dataset-import-report.md
+tests/
 ```
 
 ## Try it
-Run the tests (the file-writer tests need any Visio-made `.vsdx` as a skeleton):
-
 ```
-set ARCH_BASE_VSDX=base\base.vsdx
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests
+python scripts\build_diagram.py samples\diagram_example.json --preview
 ```
-
-Import the dataset again, check a BOQ against it, or draw the one-page catalogue (files go to `Downloads\out`):
-
-```
-python scripts\import_dataset.py <system_architecture_dataset.xlsx>
-python scripts\match_report.py <boq.xlsx> --sheet "BOQ Foreign" --sheet "PLC F&G"
-python scripts\catalogue.py
-```
-
-Make a footer-only page:
-
-```
-python scripts\footer.py --print-form
-python scripts\footer.py --form filled_form.txt --base base\base.vsdx
-```
-
-Load the plugin in Claude Code for testing, then run `/arch:arch`:
-
-```
-claude --plugin-dir "<path to this folder>"
-claude plugin validate "<path to this folder>"
-```
-
-Nothing produced here has been confirmed to open in real Visio yet (open question Q17).
+Output goes to `Downloads\out`. To make the zip for ChatGPT (this also regenerates the Claude skill): `python chatgpt-plugin\make_package.py`.

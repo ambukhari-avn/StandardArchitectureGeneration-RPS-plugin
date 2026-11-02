@@ -1,4 +1,0 @@
-{
-  "_note": "Confirmed BOQ wording -> dataset component id. Empty on purpose: an alias is a judgement (e.g. is 'Workstation' the 'Client / operator workstation'?), so each one is added only after a person confirms it. Format: {\"text\": \"wording as it appears in a BOQ description or model-number cell\", \"component\": \"<id from components.json>\"}. Matching ignores case and punctuation.",
-  "aliases": []
-}

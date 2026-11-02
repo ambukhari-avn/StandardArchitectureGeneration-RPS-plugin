@@ -1,0 +1,24 @@
+{
+  "project": {"end_user": "Example Client", "contractor": "Avanceon", "project": "Example plant", "prepared_by": "TBC", "checked_by": "TBC", "approved_by": "TBC"},
+  "notes": ["Example only."],
+  "shapes": [
+    {"id": "z2", "kind": "zone", "label": "Level 2 - supervisory", "x": 0.3, "y": 0.2, "w": 15.3, "h": 2.6},
+    {"id": "z1", "kind": "zone", "label": "Level 1 - control", "x": 0.3, "y": 3.4, "w": 15.3, "h": 2.4},
+    {"id": "z0", "kind": "zone", "label": "Level 0 - field", "x": 0.3, "y": 6.4, "w": 15.3, "h": 2.0, "dashed": true},
+    {"id": "scada", "label": "SCADA server", "component": "rack_server", "x": 3.0, "y": 0.8},
+    {"id": "ws", "label": "Operator workstation", "component": "client_operator_workstation", "x": 6.5, "y": 0.8},
+    {"id": "sw", "label": "Industrial switch", "component": "industrial_switch", "x": 10.0, "y": 0.8},
+    {"id": "plc", "label": "PLC", "component": "modular_plc_siemens", "x": 6.5, "y": 4.0},
+    {"id": "s1", "label": "Level transmitter", "x": 3.0, "y": 7.2},
+    {"id": "s2", "label": "Flow transmitter", "x": 6.5, "y": 7.2},
+    {"id": "s3", "label": "Pump motor", "x": 10.0, "y": 7.2}
+  ],
+  "lines": [
+    {"from": "scada", "to": "ws", "cable": "ethernet"},
+    {"from": "ws", "to": "sw", "cable": "ethernet"},
+    {"from": "sw", "to": "plc", "cable": "fibre"},
+    {"from": "s1", "to": "plc", "cable": "hardwired"},
+    {"from": "s2", "to": "plc", "cable": "hardwired"},
+    {"from": "s3", "to": "plc", "cable": "modbus"}
+  ]
+}

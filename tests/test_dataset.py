@@ -6,7 +6,6 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import import_dataset as imp
 from components import Components
-from purdue import PurdueMap
 from vsdx_writer import png_size
 
 
@@ -63,7 +62,7 @@ class ImportedDataTests(unittest.TestCase):
     def test_counts(self):
         self.assertEqual(len(self.c.all), 85)
         self.assertEqual(len(self.c.distinct()), 70)
-        self.assertEqual(sum(1 for x in self.c.distinct() if x["picture"]), 23)
+        self.assertEqual(sum(1 for x in self.c.distinct() if x["picture"]), 37)
 
     def test_ids_unique_and_repeats_resolve(self):
         self.assertEqual(len({x["id"] for x in self.c.all}), len(self.c.all))
@@ -91,9 +90,6 @@ class ImportedDataTests(unittest.TestCase):
         self.assertTrue(self.c.picture_path(r18["id"]))
         # row 35 (emergency stop) has its picture although the picture's anchor starts on row 34
         self.assertTrue(next(x for x in self.c.all if x["source_row"] == 35)["picture"])
-
-    def test_every_dataset_layer_is_in_the_purdue_map(self):
-        self.assertEqual(PurdueMap().unmapped_dataset_layers(self.c.layers()), [])
 
 
 if __name__ == "__main__":

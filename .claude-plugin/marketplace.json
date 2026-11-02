@@ -1,0 +1,11 @@
+{
+  "name": "rps-architecture",
+  "owner": {"name": "Avanceon"},
+  "plugins": [
+    {
+      "name": "architecture-diagram",
+      "source": "./",
+      "description": "Editable A3 Visio architecture diagrams with a fixed footer and cable colours."
+    }
+  ]
+}

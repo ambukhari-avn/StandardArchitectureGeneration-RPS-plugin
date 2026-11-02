@@ -14,7 +14,6 @@ Standard library only.
 import json
 import os
 import re
-import shutil
 import sys
 import zipfile
 
@@ -95,6 +94,25 @@ def top_picture_per_row(pictures_with_rows):
     return {r: (max(ps, key=lambda p: p["order"]), sorted([p for p in ps], key=lambda p: p["order"])[:-1]) for r, ps in by.items()}
 
 
+def emf_to_png(data, dpi=600):
+    """Render a vector .emf/.wmf symbol to a PNG with a transparent background (Pillow, import time only; Windows renders EMF)."""
+    try:
+        import io
+        from PIL import Image, ImageDraw
+    except ImportError:
+        raise SystemExit("the workbook has .emf symbols; importing them needs Pillow (pip install pillow) on Windows")
+    im = Image.open(io.BytesIO(data))
+    im.load(dpi=dpi)
+    im = im.convert("RGBA")
+    for xy in ((0, 0), (im.width - 1, 0), (0, im.height - 1), (im.width - 1, im.height - 1)):
+        if im.getpixel(xy)[:3] != (255, 255, 255) and min(im.getpixel(xy)[:3]) < 250:
+            continue
+        ImageDraw.floodfill(im, xy, (255, 255, 255, 0), thresh=6)
+    out = io.BytesIO()
+    im.save(out, "PNG")
+    return out.getvalue()
+
+
 # ---- import ----------------------------------------------------------------------------------------------------
 def run(xlsx, root=ROOT):
     cells = xlsx_reader.read_sheet(xlsx, SHEET)
@@ -156,7 +174,7 @@ def run(xlsx, root=ROOT):
                 continue
             dest = os.path.join(icons_dir, target["id"] + ".png")
             with open(dest, "wb") as fh:
-                fh.write(z.read(pic["media"]))
+                fh.write(emf_to_png(z.read(pic["media"])) if pic["media"].lower().endswith((".emf", ".wmf")) else z.read(pic["media"]))
             target["picture"] = "icons/%s.png" % target["id"]
             if hidden:
                 hidden_report.append((srow, "%d stacked picture(s) underneath were not used: %s" % (

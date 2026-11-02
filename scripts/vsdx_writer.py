@@ -67,7 +67,7 @@ def _image_shape_xml(s, rid):
          "<Cell N='ImgWidth' V='%s' F='Width*1'/>" % _f(w), "<Cell N='ImgHeight' V='%s' F='Height*1'/>" % _f(h)]
     sec = ""
     if s["key"]:
-        sec = "<Section N='User'><Row N='BoqKey'><Cell N='Value' V='%s' U='STR'/></Row></Section>" % escape(str(s["key"]), {"'": "&apos;"})
+        sec = "<Section N='User'><Row N='SourceKey'><Cell N='Value' V='%s' U='STR'/></Row></Section>" % escape(str(s["key"]), {"'": "&apos;"})
     g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='0'/><Cell N='NoLine' V='0'/><Cell N='NoShow' V='0'/><Cell N='NoSnap' V='0'/>"
          "<Row T='MoveTo' IX='1'><Cell N='X' V='0'/><Cell N='Y' V='0'/></Row>"
          "<Row T='LineTo' IX='2'><Cell N='X' V='%s' F='Width*1'/><Cell N='Y' V='0'/></Row>"
@@ -99,7 +99,7 @@ def shape_xml(s, rid=None):
                 "<Cell N='Size' V='%s'/></Row></Section>" % (1 if s["bold"] else 0, _f(s["size"] / 72)))
         sec += "<Section N='Paragraph'><Row IX='0'><Cell N='HorzAlign' V='%d'/></Row></Section>" % s["halign"]
     if s["key"]:
-        rows = "<Row N='BoqKey'><Cell N='Value' V='%s' U='STR'/></Row>" % escape(str(s["key"]), {"'": "&apos;"})
+        rows = "<Row N='SourceKey'><Cell N='Value' V='%s' U='STR'/></Row>" % escape(str(s["key"]), {"'": "&apos;"})
         sec += "<Section N='User'>%s</Section>" % rows
     g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='%d'/><Cell N='NoLine' V='%d'/><Cell N='NoShow' V='0'/>"
          "<Cell N='NoSnap' V='0'/>" % (0 if filled else 1, 1 if line is None else 0))

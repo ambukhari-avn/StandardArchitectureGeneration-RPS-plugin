@@ -1,7 +1,5 @@
 {
-  "name": "arch",
-  "displayName": "Architecture Diagram Generator",
-  "version": "0.1.0",
-  "description": "Generates a one-page A3 Purdue-model architecture diagram as an editable Visio (.vsdx) file from a BOQ. Early skeleton: builds the footer only.",
-  "keywords": ["visio", "architecture", "purdue", "scada", "boq"]
+  "name": "architecture-diagram",
+  "description": "Turns a system-architecture request into an editable one-page A3 Visio (.vsdx) with the team's fixed footer and cable colours.",
+  "version": "1.0.0"
 }

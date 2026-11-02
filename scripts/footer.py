@@ -9,7 +9,6 @@ instead of shrinking below the floor or dropping anything.
     info = build_footer(page, fields, legend, notes)
     info["top"]        # y (inches) above which the diagram may draw; the footer occupies everything below it
 """
-import math
 import os
 import re
 
