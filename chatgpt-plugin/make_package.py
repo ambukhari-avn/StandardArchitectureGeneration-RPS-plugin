@@ -34,10 +34,10 @@ description: Make an editable one-page A3 Visio (.vsdx) system-architecture diag
 
 """
 SWAPS = (("following docs/diagram-format.md in the attached arch_plugin.zip", "following docs/diagram-format.md in this plugin's folder"),
-         ("extract the zip (for example to /mnt/data) and run", "save it in the working folder and run"),
+         ("extract the zip (for example to /mnt/data) and run", "save it in a temporary folder (not the user's output folder) and run"),
          ("python arch_plugin/scripts/build_diagram.py /mnt/data/diagram.json --out /mnt/data/Architecture.vsdx",
-          'python "${CLAUDE_PLUGIN_ROOT}/scripts/build_diagram.py" diagram.json --out Architecture.vsdx'),
-         ("Give the user download links for Architecture.vsdx and diagram.json.", "Tell the user where Architecture.vsdx and diagram.json are."))
+          'python "${CLAUDE_PLUGIN_ROOT}/scripts/build_diagram.py" <temporary folder>/diagram.json --out Architecture.vsdx'),
+         ("Give the user only Architecture.vsdx.", "Tell the user where Architecture.vsdx is (in the working folder)."))
 
 
 def write_skill():
