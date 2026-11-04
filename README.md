@@ -14,6 +14,23 @@ instructions). Everything else is free-form (decision D43).
   /plugin install architecture-diagram@rps-architecture
   ```
 
+## Get the code on your laptop (clone)
+You need: [Git](https://git-scm.com/downloads), Python 3 (standard library only, no packages required; Pillow is optional, for converting
+WebP/JPEG pictures and for the PNG preview), and access to the GitHub repo (ask the owner to add your GitHub account if it is private).
+
+```
+git clone https://github.com/ambukhari-avn/StandardArchitectureGeneration-RPS-_plugin.git
+cd StandardArchitectureGeneration-RPS-_plugin
+git checkout development
+python -m unittest discover -s tests
+python scripts/build_diagram.py samples/diagram_example.json --out Architecture_test.vsdx
+```
+`main` is the released version (Claude installs from it); day-to-day work happens on `development` or a feature branch. The tests should
+pass (57, 2 skipped) and the last command should print `built` and create a file that opens in Visio.
+
+To make a change: `git checkout -b feature/<what-you-change>`, edit, run the tests, commit, push the branch, and open a pull request into
+`development`. Release steps (raise the version, `make_package.py`, merge to `main`) are in [docs/handover.md](docs/handover.md).
+
 ## Layout
 ```
 chatgpt-plugin/   instructions.md (paste into ChatGPT), make_package.py (builds arch_plugin.zip; also rewrites the Claude skill), README
@@ -26,7 +43,7 @@ scripts/          Python standard library only:
 data/             cable_types.json, footer_form.json, components.json + icons/ (library pictures)
 base/             avanceon_logo.png, base.vsdx (empty A3 page on a Visio-made package skeleton)
 samples/          diagram_example.json
-docs/             setup.md (ChatGPT and Claude setup), diagram-format.md (the JSON format), decisions.md, dataset-import-report.md
+docs/             handover.md (start here), setup.md (ChatGPT and Claude setup), diagram-format.md (the JSON format), decisions.md, dataset-import-report.md
 tests/
 ```
 
