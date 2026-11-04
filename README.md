@@ -10,7 +10,7 @@ instructions). Everything else is free-form (decision D43).
   document as knowledge, with Code Interpreter on. Steps in [docs/setup.md](docs/setup.md).
 - **Claude (Claude Code / desktop app), needs Python 3:**
   ```
-  /plugin marketplace add ambukhari-avn/StandardArchitectureGeneration-RPS-_plugin
+  /plugin marketplace add ambukhari-avn/StandardArchitectureGeneration-RPS-plugin
   /plugin install architecture-diagram@rps-architecture
   ```
 
@@ -19,8 +19,8 @@ You need: [Git](https://git-scm.com/downloads), Python 3 (standard library only,
 WebP/JPEG pictures and for the PNG preview), and access to the GitHub repo (ask the owner to add your GitHub account if it is private).
 
 ```
-git clone https://github.com/ambukhari-avn/StandardArchitectureGeneration-RPS-_plugin.git
-cd StandardArchitectureGeneration-RPS-_plugin
+git clone https://github.com/ambukhari-avn/StandardArchitectureGeneration-RPS-plugin.git
+cd StandardArchitectureGeneration-RPS-plugin
 git checkout development
 python -m unittest discover -s tests
 python scripts/build_diagram.py samples/diagram_example.json --out Architecture_test.vsdx

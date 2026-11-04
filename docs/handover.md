@@ -49,7 +49,7 @@ tests/                           run: python -m unittest discover -s tests
 
 ## Setting it up
 See [setup.md](setup.md). Short version:
-- **Claude:** `/plugin marketplace add ambukhari-avn/StandardArchitectureGeneration-RPS-_plugin`, then `/plugin install architecture-diagram@rps-architecture`. Needs Python 3 on the PC.
+- **Claude:** `/plugin marketplace add ambukhari-avn/StandardArchitectureGeneration-RPS-plugin`, then `/plugin install architecture-diagram@rps-architecture`. Needs Python 3 on the PC.
 - **ChatGPT:** create a custom GPT: paste `instructions.md` as its instructions, upload `arch_plugin.zip` and the client's Word drawing-rules document as knowledge, turn on Code Interpreter and Web search.
 
 ## Making a change (release routine)
