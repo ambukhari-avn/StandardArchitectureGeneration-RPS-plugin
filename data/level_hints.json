@@ -1,0 +1,10 @@
+{
+  "_note": "Keyword hints per Purdue level. The AI decides the level of every item; these lists only produce a WARNING when an item's label or kind looks like it belongs to a different level than the one given (decisions L7). A keyword of 4 letters or fewer must match a whole word (plural s allowed); a longer keyword matches the start of a word.",
+  "L0": ["transmitter", "analyzer", "analyser", "valve", "motor", "actuator", "sensor", "flow meter", "push button", "instrument", "detector", "gauge", "thermocouple", "solenoid"],
+  "L1": ["plc", "rtu", "rio", "remote i/o", "controller"],
+  "L2": ["scada", "hmi", "workstation", "engineering", "printer", "historian"],
+  "L3": ["historian", "mes", "site server"],
+  "L3.5": ["firewall", "dmz", "jump"],
+  "L4": ["erp", "business"],
+  "L5": ["enterprise", "cloud", "headquarters"]
+}

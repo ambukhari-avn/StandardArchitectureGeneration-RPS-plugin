@@ -12,6 +12,7 @@ instead of shrinking below the floor or dropping anything.
 import os
 import re
 
+from levels import SCOPE_FILL
 from textfit import TextFitError, fit_size
 from vsdx_writer import A3_H, A3_W, FONT_FLOOR, png_size
 
@@ -21,11 +22,20 @@ LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "base", "a
 X0, Y0, HEIGHT = 0.30, 0.30, 1.10
 X1 = A3_W - 0.30
 TOP = Y0 + HEIGHT                       # diagram content must stay above this line
-LEFT_W, NOTES_W = 6.20, 4.70            # title block / notes widths; the legend takes the rest
+# Section widths follow the approved footer picture (plan_assets/ref_footer.png, 1242 px = 15.94 in): title block ~7.7 in, notes ~2.5 in,
+# scope legend ~2.4 in, cable legend = the rest. Re-measure when the reference picture is at hand.
+LEFT_W, NOTES_W, SCOPE_W = 7.70, 2.50, 2.40
 
-REQUIRED = ("end_user", "contractor", "project", "prepared_by", "checked_by", "approved_by")
+# Scope fills of the document (grey = Avanceon scope, pink = Client / Other scope) live in levels.py: the drawing's scope boxes and this
+# legend use the same values.
+SCOPE_LEGEND = (("avanceon", "Avanceon Scope"), ("other", "Client Scope"))
+
+REQUIRED = ("end_user", "project", "prepared_by", "checked_by", "approved_by")      # the footer says "Client" for end_user
+ALIASES = {"client": "end_user"}        # 'client' is the new name; 'end_user' still works. 'contractor' is accepted but no longer printed.
+FIELD_NAMES = {"end_user": "client"}    # how a missing field is named to the user
 DEFAULTS = {"doc_name": "Architecture", "rev": "R0/1"}   # Maaden / KSU convention; override per project
 LEGEND_ROWS, LEGEND_ROW_H, LEGEND_MAX_COLS = 4, 0.20, 2
+SAMPLE_W, TEXT_X = 0.40, 0.50           # cable legend: length of the sample line, and where its text starts
 
 
 class FooterError(ValueError):
@@ -47,9 +57,12 @@ def _clean(v):
 def _check_fields(fields, allow_tbc):
     f = dict(DEFAULTS)
     f.update({k: _clean(v) for k, v in fields.items() if v is not None})
+    for alias, key in ALIASES.items():                      # 'client' fills 'end_user'
+        if f.get(alias):
+            f[key] = f[alias]
     missing = [k for k in REQUIRED if not f.get(k)]
     if missing and not allow_tbc:
-        raise FooterError("missing footer field(s): %s" % ", ".join(missing))
+        raise FooterError("missing footer field(s): %s" % ", ".join(FIELD_NAMES.get(k, k) for k in missing))
     for k in missing:
         f[k] = "TBC"
     return f
@@ -71,8 +84,10 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
     """Add the footer shapes to `page` (must be A3). Returns {'top', 'block', 'sizes'}.
 
     logo_path : PNG placed in the logo cell (default: base/avanceon_logo.png). None -> logo_text is printed instead.
-    fields : end_user, contractor, project, prepared_by, checked_by, approved_by (+ optional doc_name, rev)
-    legend : [{'label', 'color': '#RRGGBB', 'pattern': 1|2, 'kind': 'line'|'box'}]  - line = cable type, box = scope swatch
+    fields : client (alias end_user), project, prepared_by, checked_by, approved_by (+ optional doc_name, rev). contractor is accepted
+             so older files still build, but it is not printed (the approved footer has no Contractor cell).
+    legend : [{'label', 'color': '#RRGGBB', 'pattern': 1|2, 'kind': 'line'|'box', 'arrow': bool}]  - line = cable type (arrow: with an arrowhead)
+             The scope legend (grey Avanceon Scope / pink Client Scope) is fixed and is not part of this list.
     notes  : list of strings; numbered automatically
     Size is always printed as A3 and is not an input.
     """
@@ -86,16 +101,15 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
     # ---- title block ------------------------------------------------------------------------------------------
     xl = X0 + LEFT_W
     cells = [  # key, text, x, y, w, h, preferred pt, halign
-        ("end_user", "End User:  " + f["end_user"], X0, 1.0333, 3.10, 0.3667, 8, 0),
-        ("contractor", "Contractor:  " + f["contractor"], X0 + 3.10, 1.0333, 3.10, 0.3667, 8, 0),
+        ("end_user", "Client:  " + f["end_user"], X0, 1.0333, LEFT_W, 0.3667, 8, 0),
         ("project", "Project:  " + f["project"], X0, 0.6667, LEFT_W, 0.3666, 8, 0),
         ("logo", logo_text, X0, Y0, 1.50, 0.3667, 12, 1),
         ("doc_name", "Documentation Name:  " + f["doc_name"], X0 + 1.50, 0.4833, LEFT_W - 1.50, 0.1834, 7, 0),
-        ("prepared_by", "Prepared by:  " + f["prepared_by"], X0 + 1.50, Y0, 1.00, 0.1833, 6.5, 0),
-        ("checked_by", "Checked by:  " + f["checked_by"], X0 + 2.50, Y0, 1.00, 0.1833, 6.5, 0),
-        ("approved_by", "Approved by:  " + f["approved_by"], X0 + 3.50, Y0, 1.00, 0.1833, 6.5, 0),
-        ("size", "Size:  A3", X0 + 4.50, Y0, 0.80, 0.1833, 6.5, 0),
-        ("rev", "Rev/Sheet:  " + f["rev"], X0 + 5.30, Y0, 0.90, 0.1833, 6.5, 0),
+        ("prepared_by", "Prepared by:  " + f["prepared_by"], X0 + 1.50, Y0, 1.30, 0.1833, 6.5, 0),
+        ("checked_by", "Checked by:  " + f["checked_by"], X0 + 2.80, Y0, 1.30, 0.1833, 6.5, 0),
+        ("approved_by", "Approved by:  " + f["approved_by"], X0 + 4.10, Y0, 1.30, 0.1833, 6.5, 0),
+        ("size", "Size:  A3", X0 + 5.40, Y0, 0.90, 0.1833, 6.5, 0),
+        ("rev", "Rev/Sheet:  " + f["rev"], X0 + 6.30, Y0, 1.40, 0.1833, 6.5, 0),
     ]
     for key, text, x, y, w, h, pref, ha in cells:
         if key == "logo" and logo_path:                     # the logo is a picture, not text
@@ -124,8 +138,18 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
         sizes["notes"] = size
         page.text(xl + 0.03, Y0 + 0.03, NOTES_W - 0.06, HEIGHT - 0.26, body, nb, size=size, halign=0, valign=0)
 
-    # ---- legend -----------------------------------------------------------------------------------------------
-    xg = xl + NOTES_W
+    # ---- scope legend: two stacked boxes, grey Avanceon / pink Client ----------------------------------------------
+    xs = xl + NOTES_W
+    sc = page.rect("block", xs, Y0, SCOPE_W, HEIGHT, foot, fill=None, lw=0.5)
+    bh, gap = 0.40, 0.10
+    y = TOP - (HEIGHT - 2 * bh - gap) / 2 - bh
+    for scope, text in SCOPE_LEGEND:
+        page.rect("block", xs + 0.15, y, SCOPE_W - 0.30, bh, sc, fill=SCOPE_FILL[scope], line="#404040", lw=0.5, text=text, size=8,
+                  bold=True, halign=1, valign=1, key="legend:scope:" + scope)
+        y -= bh + gap
+
+    # ---- cable legend -----------------------------------------------------------------------------------------
+    xg = xs + SCOPE_W
     lg = page.rect("block", xg, Y0, X1 - xg, HEIGHT, foot, fill=None, lw=0.5)
     page.text(xg, TOP - 0.22, X1 - xg, 0.20, "Legend", lg, size=8, bold=True)
     cols = 1 if len(legend) <= LEGEND_ROWS else 2
@@ -135,13 +159,13 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
         x = xg + 0.10 + c * colw
         y = TOP - 0.30 - LEGEND_ROW_H * (r + 1)
         label = _clean(e["label"])
-        size = _fit(label, colw - 0.85, LEGEND_ROW_H - 0.02, (7, 6.5, 6), what="legend entry")
+        size = _fit(label, colw - TEXT_X - 0.05, LEGEND_ROW_H - 0.02, (7, 6.5, 6), what="legend entry")
         if e.get("kind", "line") == "line":
-            page.line([(x, y + LEGEND_ROW_H / 2), (x + 0.6, y + LEGEND_ROW_H / 2)], e["color"], e.get("pattern", 1), 1.0, lg,
-                      key="legend:" + label)
+            page.line([(x, y + LEGEND_ROW_H / 2), (x + SAMPLE_W, y + LEGEND_ROW_H / 2)], e["color"], e.get("pattern", 1), 1.0, lg,
+                      key="legend:" + label, arrow=bool(e.get("arrow")))
         else:
-            page.rect("icon", x, y + 0.03, 0.6, LEGEND_ROW_H - 0.06, lg, fill=e["color"], line="#404040", lw=0.5, key="legend:" + label)
-        page.text(x + 0.70, y, colw - 0.80, LEGEND_ROW_H, label, lg, size=size, halign=0)
+            page.rect("icon", x, y + 0.03, SAMPLE_W, LEGEND_ROW_H - 0.06, lg, fill=e["color"], line="#404040", lw=0.5, key="legend:" + label)
+        page.text(x + TEXT_X, y, colw - TEXT_X - 0.05, LEGEND_ROW_H, label, lg, size=size, halign=0)
     return {"top": TOP, "block": foot, "sizes": sizes}
 
 
@@ -161,8 +185,8 @@ if __name__ == "__main__":
                     help="existing Visio-made .vsdx used as the package skeleton (or set ARCH_BASE_VSDX)")
     ap.add_argument("--out", default=os.path.join(os.path.expanduser("~"), "Downloads", "out", "footer_demo.vsdx"))
     ap.add_argument("--tbc", action="store_true", help="fill missing fields with TBC")
-    for k in REQUIRED + ("doc_name", "rev"):
-        ap.add_argument("--" + k.replace("_", "-"), help="overrides the form value")
+    for k in REQUIRED + ("contractor", "client", "doc_name", "rev"):
+        ap.add_argument("--" + k.replace("_", "-"), help="overrides the form value" + (" (not printed)" if k == "contractor" else ""))
     a = ap.parse_args()
     if a.print_form:
         print(blank_form_text())
@@ -170,7 +194,7 @@ if __name__ == "__main__":
     if not a.base:
         ap.error("--base (or ARCH_BASE_VSDX) is required")
     fields, notes = ({}, []) if not a.form else parse_form(open(a.form, encoding="utf-8-sig").read())
-    fields.update({k: getattr(a, k) for k in REQUIRED + ("doc_name", "rev") if getattr(a, k)})
+    fields.update({k: getattr(a, k) for k in REQUIRED + ("contractor", "client", "doc_name", "rev") if getattr(a, k)})
     pg = Page()
     pg.rect("frame", 0.20, 0.20, A3_W - 0.40, A3_H - 0.40, fill=None, lw=1.25)
     from cables import Cables

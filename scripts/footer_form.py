@@ -3,8 +3,8 @@
 The questions live in data/footer_form.json (the single source of truth). A filled form can be plain text,
 one 'Label: value' per line, or JSON keyed by field key:
 
-    End User: King Saud University
-    Contractor: CRCC
+    Client: King Saud University
+    Project: ...
     ...
     Notes:
     Two ASPs are considered for each existing building.
@@ -39,11 +39,15 @@ def blank_form_text(path=TEMPLATE):
 def parse_form(text, path=TEMPLATE):
     """Filled form (text or JSON) -> (fields dict keyed by field key, notes list). Blank values are omitted."""
     fields, notes_label = load_template(path)
-    by_label = {f["label"].lower(): f["key"] for f in fields}
+    by_label = {}
+    for f in fields:                                    # a form that still says "End User:" parses through the alias
+        for name in [f["label"]] + list(f.get("aliases", [])):
+            by_label[name.lower()] = f["key"]
     keys = {f["key"] for f in fields}
+    key_alias = {a: f["key"] for f in fields for a in f.get("key_aliases", [])}
     out, notes = {}, []
     if text.lstrip().startswith("{"):
-        data = json.loads(text)
+        data = {key_alias.get(k, k): v for k, v in json.loads(text).items()}
         unknown = set(data) - keys - {"notes"}
         if unknown:
             raise FormError("unknown form key(s): %s" % ", ".join(sorted(unknown)))

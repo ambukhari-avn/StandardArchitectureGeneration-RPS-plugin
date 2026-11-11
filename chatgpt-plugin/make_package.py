@@ -12,13 +12,16 @@ import sys
 import zipfile
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-KEEP = ("scripts", "data", "base", "samples", os.path.join("docs", "diagram-format.md"))
+KEEP = ("scripts", "data", "base", "samples", os.path.join("docs", "diagram-format.md"), os.path.join("docs", "diagram-format-v2.md"),
+        os.path.join(".claude-plugin", "plugin.json"))
 SKIP = ("__pycache__", ".pyc", "dev_preview.py", "import_dataset.py", "xlsx_reader.py")                  # development aids, not needed to draw
 
 
 def files():
     for top in KEEP:
         path = os.path.join(ROOT, top)
+        if not os.path.exists(path):
+            raise SystemExit("make_package.py: %s is listed in KEEP but does not exist" % top)
         walk = [(path, [], [os.path.basename(path)])] if os.path.isfile(path) else os.walk(path)
         for d, _, names in walk:
             for n in names:
@@ -33,15 +36,16 @@ description: Make an editable one-page A3 Visio (.vsdx) system-architecture diag
 ---
 
 """
-SWAPS = (("following docs/diagram-format.md in the attached arch_plugin.zip", "following docs/diagram-format.md in this plugin's folder"),
+SWAPS = (("following docs/diagram-format-v2.md in the attached arch_plugin.zip", "following docs/diagram-format-v2.md in this plugin's folder"),
          ("extract the zip (for example to /mnt/data) and run", "save it in a temporary folder (not the user's output folder) and run"),
          ("python arch_plugin/scripts/build_diagram.py /mnt/data/diagram.json --out /mnt/data/Architecture.vsdx",
           'python "${CLAUDE_PLUGIN_ROOT}/scripts/build_diagram.py" <temporary folder>/diagram.json --out Architecture.vsdx'),
+         ("python arch_plugin/scripts/find_component.py", 'python "${CLAUDE_PLUGIN_ROOT}/scripts/find_component.py"'),
          ("Give the user only Architecture.vsdx.", "Tell the user where Architecture.vsdx is (in the working folder)."))
 
 
-def write_skill():
-    """skills/architecture-diagram/SKILL.md for the Claude plugin, made from instructions.md so both platforms share one text."""
+def skill_text():
+    """The text of skills/architecture-diagram/SKILL.md for the Claude plugin, made from instructions.md so both platforms share one text."""
     with open(os.path.join(ROOT, "chatgpt-plugin", "instructions.md"), encoding="utf-8") as fh:
         body = fh.read().strip()
     for old, new in SWAPS:
@@ -50,10 +54,15 @@ def write_skill():
         body = body.replace(old, new)
     body += ("\n\n(The plugin folder is ${CLAUDE_PLUGIN_ROOT}: it holds scripts/, data/, base/, samples/ and docs/. "
              "If that variable is empty, it is two folders above this file.)\n")
+    return SKILL_HEAD + body
+
+
+def write_skill():
+    """Write SKILL.md. It is never edited by hand: change instructions.md and run this."""
     path = os.path.join(ROOT, "skills", "architecture-diagram", "SKILL.md")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(SKILL_HEAD + body)
+        fh.write(skill_text())
 
 
 if __name__ == "__main__":

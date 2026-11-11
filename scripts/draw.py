@@ -11,6 +11,7 @@ from vsdx_writer import FONT_FLOOR, png_size
 LABEL_SIZES = (7, 6.5, 6)
 BOX_SIZES = (8, 7, 6.5, 6)
 LABEL_ZONE = 0.30                 # inches reserved under a picture for its label (three lines at 6 pt)
+LABEL_OVERHANG = 0.08             # the label may be this much wider than the picture cell on each side (items are at least 0.23 in apart), so a model name stays on one line
 BOX_FILL, BOX_LINE = "#F2F2F2", "#404040"
 
 
@@ -18,7 +19,7 @@ def draw_picture(page, pic, label, x, y, w, h, key, parent=None, soft=False):
     """A picture (PNG path) in the cell, true aspect ratio, centred, with `label` underneath.
     soft: a label that does not fit is printed at the font floor instead of raising TextFitError."""
     try:
-        size = fit_size(label, w, LABEL_ZONE, LABEL_SIZES)
+        size = fit_size(label, w + 2 * LABEL_OVERHANG, LABEL_ZONE, LABEL_SIZES)
     except TextFitError:
         if not soft:
             raise
@@ -30,7 +31,7 @@ def draw_picture(page, pic, label, x, y, w, h, key, parent=None, soft=False):
     pw = min(w, area_h * iw / ih)
     ph = pw * ih / iw
     img = page.image(x + (w - pw) / 2, y + LABEL_ZONE + (area_h - ph) / 2, pw, ph, pic, parent, key=key)
-    txt = page.text(x, y, w, LABEL_ZONE, label, parent, size=size, valign=0)
+    txt = page.text(x - LABEL_OVERHANG, y, w + 2 * LABEL_OVERHANG, LABEL_ZONE, label, parent, size=size, valign=0)
     return [img, txt]
 
 

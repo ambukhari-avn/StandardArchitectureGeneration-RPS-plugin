@@ -1,0 +1,24 @@
+{
+  "spec_version": 2,
+  "project": {"client": "Example Client", "project": "Example plant", "doc_name": "Architecture", "prepared_by": "TBC", "checked_by": "TBC", "approved_by": "TBC", "rev": "R0/1"},
+  "notes": ["Example only."],
+  "items": [
+    {"id": "pt", "label": "Pressure transmitter", "model": "Rosemount 3051", "kind": "instrument", "level": "L0", "scope": "avanceon", "qty": 2, "group": "plc1"},
+    {"id": "an", "label": "Analyzer", "kind": "instrument", "level": "L0", "scope": "avanceon", "group": "plc1"},
+    {"id": "plc1", "label": "Primary Controller", "model": "Siemens S7-1500", "kind": "controller", "level": "L1", "scope": "avanceon", "component": "modular_plc_siemens"},
+    {"id": "plc2", "label": "Secondary Controller", "model": "Siemens S7-1500", "kind": "controller", "level": "L1", "scope": "avanceon", "component": "modular_plc_siemens"},
+    {"id": "ws", "label": "SCADA workstation", "kind": "workstation", "level": "L2", "scope": "avanceon", "qty": 2, "component": "client_operator_workstation"}
+  ],
+  "redundancy": [
+    {"primary": "plc1", "secondary": "plc2", "links": 2, "cable": "ethernet", "label": "Redundancy", "assumed": true}
+  ],
+  "links": [
+    {"from": "pt", "to": "plc1", "cable": "hardwired", "label": "4-20 mA", "assumed": true},
+    {"from": "an", "to": "plc1", "cable": "hardwired", "assumed": true},
+    {"from": "plc1", "to": "ws", "cable": "ethernet", "label": "OPC UA", "assumed": true},
+    {"from": "plc2", "to": "ws", "cable": "ethernet", "label": "OPC UA", "assumed": true}
+  ],
+  "rings": [],
+  "assumptions": ["Instruments are wired to the primary controller.", "Both controllers talk to both workstations over Ethernet."],
+  "questions": []
+}

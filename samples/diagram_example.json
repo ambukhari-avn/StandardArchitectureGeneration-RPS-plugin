@@ -19,6 +19,6 @@
     {"from": "sw", "to": "plc", "cable": "fibre"},
     {"from": "s1", "to": "plc", "cable": "hardwired"},
     {"from": "s2", "to": "plc", "cable": "hardwired"},
-    {"from": "s3", "to": "plc", "cable": "modbus"}
+    {"from": "s3", "to": "plc", "cable": "modbus", "label": "Modbus RTU"}
   ]
 }

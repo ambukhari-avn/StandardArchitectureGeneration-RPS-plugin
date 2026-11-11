@@ -56,11 +56,52 @@ class FooterTests(unittest.TestCase):
         self.assertIn("Size:  A3", [s["text"] for s in pg.shapes])
 
     def test_missing_field_fails_unless_tbc(self):
-        bad = dict(FIELDS, contractor="  ")
-        with self.assertRaisesRegex(footer.FooterError, "contractor"):
+        bad = dict(FIELDS, end_user="  ")
+        with self.assertRaisesRegex(footer.FooterError, "client"):
             build(fields=bad)
         pg, _ = build(fields=bad, allow_tbc=True)
-        self.assertIn("Contractor:  TBC", [s["text"] for s in pg.shapes])
+        self.assertIn("Client:  TBC", [s["text"] for s in pg.shapes])
+
+    def test_client_replaces_end_user_and_there_is_no_contractor_cell(self):
+        pg, _ = build()
+        texts = [s["text"] for s in pg.shapes]
+        self.assertIn("Client:  King Saud University", texts)
+        self.assertFalse([t for t in texts if "Contractor" in t or "End User" in t])
+        new_key = dict(FIELDS)
+        new_key.pop("end_user")
+        new_key["client"] = "New Client"                                       # the new key works too
+        self.assertIn("Client:  New Client", [s["text"] for s in build(fields=new_key)[0].shapes])
+        no_contractor = {k: v for k, v in FIELDS.items() if k != "contractor"}  # contractor is no longer required
+        build(fields=no_contractor)
+        cell = next(s for s in pg.shapes if s["text"].startswith("Client:"))   # the Client cell takes the full title-block width
+        self.assertAlmostEqual(cell["w"], footer.LEFT_W)
+
+    def test_the_scope_legend_is_two_stacked_boxes_with_the_document_colours(self):
+        pg, _ = build()
+        boxes = {s["text"]: s for s in pg.shapes if s["text"] in ("Avanceon Scope", "Client Scope")}
+        self.assertEqual(set(boxes), {"Avanceon Scope", "Client Scope"})
+        self.assertEqual(boxes["Avanceon Scope"]["fill"], "#E7E6E6")
+        self.assertEqual(boxes["Client Scope"]["fill"], "#F2DCDB")
+        self.assertEqual(boxes["Avanceon Scope"]["fill"], footer.SCOPE_FILL["avanceon"])
+        self.assertGreater(boxes["Avanceon Scope"]["y"], boxes["Client Scope"]["y"])       # stacked: grey above pink
+        self.assertAlmostEqual(boxes["Avanceon Scope"]["x"], boxes["Client Scope"]["x"])
+        self.assertTrue(all(b["bold"] and b["size"] >= 8 for b in boxes.values()))
+
+    def test_a_legend_entry_with_an_arrow_draws_an_arrowhead(self):
+        pg, _ = build(legend=[{"label": "Hardwired (Inst Cable)", "color": "#000000", "arrow": True},
+                              {"label": "Ethernet Cable", "color": "#0000FF", "pattern": 2}])
+        samples = {s["key"]: s for s in pg.shapes if s["role"] == "line"}
+        self.assertTrue(samples["legend:Hardwired (Inst Cable)"]["arrow"])
+        self.assertFalse(samples["legend:Ethernet Cable"]["arrow"])
+
+    def test_all_five_cables_fit_the_legend_at_a_legible_size(self):
+        from cables import Cables
+        c = Cables()
+        pg, _ = build(legend=c.legend(list(c.by_id)))
+        for s in pg.shapes:
+            if s["text"] in [e["label"] for e in c.legend(list(c.by_id))]:
+                self.assertGreaterEqual(s["size"], FONT_FLOOR)
+        self.assertEqual(sum(1 for s in pg.shapes if s["role"] == "line"), 5)
 
     def test_overflow_fails_loudly(self):
         with self.assertRaises(footer.FooterError):

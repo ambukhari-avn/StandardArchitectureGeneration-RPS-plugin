@@ -11,7 +11,7 @@ HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, "..", "scripts"))
 import textfit
 from components import Components
-from draw import LABEL_ZONE, draw_component
+from draw import LABEL_OVERHANG, LABEL_ZONE, draw_component
 from vsdx_writer import FONT_FLOOR, Page, png_size, write_vsdx
 
 BASE = os.environ.get("ARCH_BASE_VSDX") or os.path.join(HERE, "..", "base", "base.vsdx")
@@ -60,6 +60,15 @@ class DrawTests(unittest.TestCase):
         iw, ih = png_size(self.c.picture_path("hmi_panel_siemens"))
         self.assertAlmostEqual(img["w"] / img["h"], iw / ih, 3)                      # true aspect ratio
         self.assertTrue(img["key"].endswith("|qty=3"))
+
+    def test_the_label_may_overhang_the_picture_cell_so_a_model_name_stays_on_one_line(self):
+        pg = Page()
+        draw_component(pg, self.c, "hmi_panel_siemens", 2.0, 2.0, 0.8, 0.76)
+        img, txt = pg.shapes
+        self.assertAlmostEqual(txt["x"], 2.0 - LABEL_OVERHANG)
+        self.assertAlmostEqual(txt["w"], 0.8 + 2 * LABEL_OVERHANG)
+        self.assertLessEqual(LABEL_OVERHANG, 0.08 + 1e-9)                             # items are at least 0.35 * 0.65 = 0.23 in apart
+        self.assertLessEqual(txt["x"] + txt["w"], img["x"] + 0.8 + 0.1)
 
     def test_repeat_row_resolves_to_the_component_it_repeats(self):
         pg = Page()
