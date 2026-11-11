@@ -23,7 +23,7 @@ class Page:
     def add(self, kind, role, x, y, w, h, parent=None, **kw):
         s = dict(id=len(self.shapes) + 1, kind=kind, role=role, x=x, y=y, w=w, h=h, parent=parent, fill=None,
                  line="#000000", lw=0.75, pattern=1, text="", size=6.5, bold=False, halign=1, valign=1, key=None,
-                 pts=None)
+                 pts=None, arrow=False, color="#000000", italic=False)
         s.update(kw)
         self.shapes.append(s)
         return s["id"]
@@ -39,10 +39,22 @@ class Page:
         png_size(path)                              # fail now if it is not a PNG
         return self.add("image", "icon", x, y, w, h, parent, image=path, **kw)
 
-    def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None):
+    def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None, arrow=False):
+        """A polyline. arrow=True puts an arrowhead at the last point (Visio arrow code 13, medium size)."""
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
         return self.add("line", "line", min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent,
-                        pts=pts, line=color, lw=lw, pattern=pattern, key=key)
+                        pts=pts, line=color, lw=lw, pattern=pattern, key=key, arrow=bool(arrow))
+
+    def polygon(self, pts, fill=None, line="#000000", pattern=1, lw=1.0, parent=None, key=None, text="", size=8, bold=False):
+        """A closed filled outline (used for the fibre-ring ellipse). The first point is repeated at the end when the list is open."""
+        pts = [tuple(p) for p in pts]
+        if len(pts) < 3:
+            raise ValueError("a polygon needs at least 3 points")
+        if pts[0] != pts[-1]:
+            pts.append(pts[0])
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        return self.add("polygon", "shape", min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent, pts=pts, fill=fill, line=line,
+                        lw=lw, pattern=pattern, key=key, text=text, size=size, bold=bold)
 
 
 def _f(v):
@@ -89,14 +101,22 @@ def shape_xml(s, rid=None):
     line = s["line"]
     filled = s["fill"] is not None and s["kind"] != "line"
     c += ["<Cell N='LinePattern' V='%d'/>" % (0 if line is None else s["pattern"]),
-          "<Cell N='LineColor' V='%s'/>" % (line or "#000000"), "<Cell N='LineWeight' V='%s'/>" % _f(s["lw"] / 72),
-          "<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
+          "<Cell N='LineColor' V='%s'/>" % (line or "#000000"), "<Cell N='LineWeight' V='%s'/>" % _f(s["lw"] / 72)]
+    if s["kind"] == "line" and s.get("arrow"):
+        c += ["<Cell N='EndArrow' V='13'/>", "<Cell N='EndArrowSize' V='2'/>"]
+    c += ["<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
     c += ["<Cell N='%s' V='0.02'/>" % n for n in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin")]
     c.append("<Cell N='VerticalAlign' V='%d'/>" % s["valign"])
+    if s.get("rot"):                            # text turned 90 degrees counter-clockwise (reads upwards): the text block is the shape turned on its side
+        c += ["<Cell N='TxtPinX' V='%s' F='Width*0.5'/>" % _f(w / 2), "<Cell N='TxtPinY' V='%s' F='Height*0.5'/>" % _f(h / 2),
+              "<Cell N='TxtWidth' V='%s' F='Height*1'/>" % _f(h), "<Cell N='TxtHeight' V='%s' F='Width*1'/>" % _f(w),
+              "<Cell N='TxtLocPinX' V='%s' F='TxtWidth*0.5'/>" % _f(h / 2), "<Cell N='TxtLocPinY' V='%s' F='TxtHeight*0.5'/>" % _f(w / 2),
+              "<Cell N='TxtAngle' V='1.5707963267949'/>"]
     sec = ""                                    # section order matches Visio's own files: Character, Paragraph, User, Geometry
     if s["text"]:
-        sec += ("<Section N='Character'><Row IX='0'><Cell N='Color' V='#000000'/><Cell N='Style' V='%d'/>"
-                "<Cell N='Size' V='%s'/></Row></Section>" % (1 if s["bold"] else 0, _f(s["size"] / 72)))
+        sec += ("<Section N='Character'><Row IX='0'><Cell N='Color' V='%s'/><Cell N='Style' V='%d'/>"
+                "<Cell N='Size' V='%s'/></Row></Section>" % (s.get("color") or "#000000", (1 if s["bold"] else 0) | (2 if s.get("italic") else 0),
+                                                              _f(s["size"] / 72)))
         sec += "<Section N='Paragraph'><Row IX='0'><Cell N='HorzAlign' V='%d'/></Row></Section>" % s["halign"]
     if s["key"]:
         rows = "<Row N='SourceKey'><Cell N='Value' V='%s' U='STR'/></Row>" % escape(str(s["key"]), {"'": "&apos;"})
@@ -109,7 +129,7 @@ def shape_xml(s, rid=None):
         for i, (t, ax, ay, fx, fy) in enumerate(rows, 1):
             g += "<Row T='%s' IX='%d'><Cell N='X' V='%s'%s/><Cell N='Y' V='%s'%s/></Row>" % (
                 t, i, _f(ax * w), " F='%s'" % fx if fx else "", _f(ay * h), " F='%s'" % fy if fy else "")
-    else:                                       # polyline
+    else:                                       # polyline or polygon (a polygon repeats its first point at the end)
         for i, (px, py) in enumerate(s["pts"], 1):
             g += "<Row T='%s' IX='%d'><Cell N='X' V='%s'/><Cell N='Y' V='%s'/></Row>" % (
                 "MoveTo" if i == 1 else "LineTo", i, _f(px - x), _f(py - y))
@@ -119,7 +139,7 @@ def shape_xml(s, rid=None):
         s["id"], "".join(c), sec, g, txt)
 
 
-def write_vsdx(page, out, base, title="Architecture"):
+def write_vsdx(page, out, base, title="Architecture", description=None):
     if abs(page.w - A3_W) > 0.01 or abs(page.h - A3_H) > 0.01:
         raise ValueError("page is %.3f x %.3f in; output must be A3 landscape (%.4f x %.4f)" % (page.w, page.h, A3_W, A3_H))
     images = {}                                 # source path -> (relationship id, media part name); each file stored once
@@ -138,7 +158,7 @@ def write_vsdx(page, out, base, title="Architecture"):
                      'Target="../media/%s"/>' % v for v in images.values()) + "</Relationships>")
     core = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/'
             'package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>%s</dc:title>'
-            '</cp:coreProperties>' % escape(title))
+            '%s</cp:coreProperties>' % (escape(title), "<dc:description>%s</dc:description>" % escape(description) if description else ""))
     cx, cy = page.w / 2, page.h / 2
     view = lambda t: re.sub(r"ViewCenterY='[^']*'", "ViewCenterY='%s'" % cy, re.sub(r"ViewCenterX='[^']*'", "ViewCenterX='%s'" % cx, t))
     with zipfile.ZipFile(base) as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zo:

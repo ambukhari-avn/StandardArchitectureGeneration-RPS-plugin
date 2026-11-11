@@ -1,8 +1,8 @@
 {
   "title": "Footer details",
   "fields": [
-    {"key": "end_user",    "label": "End User",           "required": true},
-    {"key": "contractor",  "label": "Contractor",         "required": true},
+    {"key": "end_user",    "label": "Client",             "aliases": ["end user"], "key_aliases": ["client"], "required": true},
+    {"key": "contractor",  "label": "Contractor",         "required": false, "drawn": false},
     {"key": "project",     "label": "Project",            "required": true},
     {"key": "doc_name",    "label": "Documentation Name", "required": false, "default": "Architecture"},
     {"key": "prepared_by", "label": "Prepared by",        "required": true},

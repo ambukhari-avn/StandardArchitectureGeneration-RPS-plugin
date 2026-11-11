@@ -1,4 +1,5 @@
 """Dataset import and loader tests. Run:  python -m unittest discover -s tests"""
+import json
 import os
 import sys
 import unittest
@@ -6,6 +7,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import import_dataset as imp
 from components import Components
+from components import DATA
 from vsdx_writer import png_size
 
 
@@ -57,7 +59,7 @@ class ImportedDataTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.c = Components()
+        cls.c = Components(extras=False)          # the workbook's rows only; hand-added components are tested below
 
     def test_counts(self):
         self.assertEqual(len(self.c.all), 85)
@@ -90,6 +92,118 @@ class ImportedDataTests(unittest.TestCase):
         self.assertTrue(self.c.picture_path(r18["id"]))
         # row 35 (emergency stop) has its picture although the picture's anchor starts on row 34
         self.assertTrue(next(x for x in self.c.all if x["source_row"] == 35)["picture"])
+
+
+class ExtrasTests(unittest.TestCase):
+    """data/components_extra.json: hand-added components that import_dataset.py must never overwrite."""
+
+    def write(self, directory, extra):
+        import json
+        import shutil
+        shutil.copy(os.path.join(DATA, "components.json"), os.path.join(directory, "components.json"))
+        os.makedirs(os.path.join(directory, "icons"), exist_ok=True)
+        shutil.copy(os.path.join(DATA, "icons", "patch_panel.png"), os.path.join(directory, "icons", "patch_panel.png"))
+        with open(os.path.join(directory, "components_extra.json"), "w", encoding="utf-8") as fh:
+            json.dump({"source": {}, "components": extra}, fh)
+        return os.path.join(directory, "components.json")
+
+    @staticmethod
+    def comp(cid, **kw):
+        c = {"id": cid, "layer": "Network", "title": cid, "label": cid, "brand": None, "part_number": None, "confidence": None,
+             "image_file_name": None, "picture": "icons/patch_panel.png", "duplicate_of": None, "source_row": None}
+        c.update(kw)
+        return c
+
+    def test_the_extras_are_merged_into_the_library(self):
+        c = Components()
+        self.assertEqual(c.extra_ids, {"network_switch_approved", "fo_patch_panel"})
+        self.assertEqual(len(c.all), 85 + 2)
+        self.assertEqual(len(Components(extras=False).all), 85)
+        self.assertEqual(c.get("network_switch_approved")["label"], "Network switch")
+
+    def test_the_approved_pictures_exist_and_are_png(self):
+        c = Components()
+        for cid in ("network_switch_approved", "fo_patch_panel"):
+            w, h = png_size(c.picture_path(cid))
+            self.assertGreater(w, 100)
+            self.assertGreater(h, 100)
+
+    def test_the_imported_workbook_data_is_untouched_by_the_extras(self):
+        with open(os.path.join(DATA, "components.json"), encoding="utf-8") as fh:
+            raw = json.load(fh)
+        self.assertFalse({c["id"] for c in raw["components"]} & Components().extra_ids)
+
+    def test_a_duplicate_id_in_the_extras_raises(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        path = self.write(d, [self.comp("patch_panel")])              # an id that components.json already has
+        with self.assertRaises(ValueError) as cm:
+            Components(path)
+        self.assertIn("patch_panel", str(cm.exception))
+
+    def test_an_extra_with_a_new_id_loads_and_resolves_its_picture_next_to_the_data_file(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        c = Components(self.write(d, [self.comp("my_extra")]))
+        self.assertIn("my_extra", c.extra_ids)
+        self.assertTrue(c.picture_path("my_extra").startswith(d))
+
+    def test_a_missing_extras_file_is_fine(self):
+        import tempfile
+        import shutil
+        d = tempfile.mkdtemp()
+        shutil.copy(os.path.join(DATA, "components.json"), d)
+        self.assertEqual(Components(os.path.join(d, "components.json")).extra_ids, set())
+
+
+class FindComponentTests(unittest.TestCase):
+    """scripts/find_component.py: the library is searched before the web."""
+
+    @classmethod
+    def setUpClass(cls):
+        import find_component
+        cls.fc = find_component
+
+    def ids(self, text):
+        return [c["id"] for c in self.fc.find(text)]
+
+    def test_s7_and_siemens_both_find_the_modular_plc(self):
+        self.assertIn("modular_plc_siemens", self.ids("S7"))
+        self.assertIn("modular_plc_siemens", self.ids("Siemens"))
+        self.assertIn("modular_plc_siemens", self.ids("siemens modular"))
+        self.assertEqual(self.ids("siemens modular")[0], "modular_plc_siemens")
+
+    def test_every_word_must_match_and_case_does_not_matter(self):
+        self.assertEqual(self.ids("SIEMENS zzzz"), [])
+        self.assertEqual(self.ids("   "), [])
+        self.assertEqual(self.ids("MODULAR PLC SIEMENS"), self.ids("modular plc siemens"))
+
+    def test_the_hand_added_components_are_searched_too(self):
+        self.assertIn("network_switch_approved", self.ids("approved"))
+        self.assertIn("fo_patch_panel", self.ids("FO patch"))
+
+    def test_exact_repeats_are_not_listed_twice(self):
+        ids = self.ids("level switch")
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertFalse([i for i in ids if i.endswith(tuple("0123456789")) and "_row" in i])
+
+    def test_the_command_prints_ids_and_returns_0_or_1(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self.fc.main(["S7"]), 0)
+        self.assertIn("modular_plc_siemens", out.getvalue())
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(self.fc.main(["nothing", "like", "this"]), 1)
+        self.assertIn("No library component matches", out.getvalue())
+
+    def test_the_output_says_whether_a_component_has_a_picture(self):
+        c = Components()
+        by_id = {x["id"]: x for x in c.all}
+        self.assertIn("picture", self.fc.describe(by_id["modular_plc_siemens"], c))
+        self.assertIn("no picture", self.fc.describe(by_id["pressure_transmitter"], c))
 
 
 if __name__ == "__main__":

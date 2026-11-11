@@ -27,6 +27,8 @@ class Cables:
                 raise CableError("cable %r: pattern must be 1 (solid) or 2 (dashed)" % c.get("id"))
             if not c.get("label", "").strip() or not c.get("id"):
                 raise CableError("every cable needs an id and a label")
+            if "arrow" in c and not isinstance(c["arrow"], bool):
+                raise CableError("cable %r: arrow must be true or false" % c.get("id"))
             if c["id"] in self.by_id:
                 raise CableError("duplicate cable id %r" % c["id"])
             self.by_id[c["id"]] = c
@@ -43,9 +45,14 @@ class Cables:
         c = self.get(cid)
         return c["color"], c["pattern"]
 
+    def style(self, cid):
+        """Everything needed to draw a line of this type: {'color', 'pattern', 'arrow'} (arrow is False unless the table says so)."""
+        c = self.get(cid)
+        return {"color": c["color"], "pattern": c["pattern"], "arrow": bool(c.get("arrow", False))}
+
     def legend(self, used_ids):
         """Footer legend entries for the cable types actually drawn, in table order. Unknown ids raise."""
         for u in used_ids:
             self.get(u)
-        return [{"label": c["label"], "color": c["color"], "pattern": c["pattern"], "kind": "line"}
+        return [{"label": c["label"], "color": c["color"], "pattern": c["pattern"], "kind": "line", "arrow": bool(c.get("arrow", False))}
                 for cid, c in self.by_id.items() if cid in set(used_ids)]

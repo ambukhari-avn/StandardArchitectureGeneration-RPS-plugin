@@ -1,0 +1,120 @@
+{
+  "spec_version": 2,
+  "project": {
+    "end_user": "Example Client",
+    "project": "Example ring plant",
+    "prepared_by": "TBC",
+    "checked_by": "TBC",
+    "approved_by": "TBC"
+  },
+  "items": [
+    {
+      "id": "ws",
+      "label": "SCADA workstation",
+      "level": "L2",
+      "scope": "avanceon",
+      "component": "client_operator_workstation",
+      "qty": 2
+    },
+    {
+      "id": "plc1",
+      "label": "Main PLC",
+      "level": "L1",
+      "scope": "avanceon",
+      "component": "modular_plc_siemens",
+      "model": "Siemens S7-1500"
+    },
+    {
+      "id": "rio1",
+      "label": "RIO-1",
+      "kind": "rio",
+      "level": "L1",
+      "scope": "avanceon",
+      "component": "remote_i_o_interface"
+    },
+    {
+      "id": "rio2",
+      "label": "RIO-2",
+      "kind": "rio",
+      "level": "L1",
+      "scope": "avanceon",
+      "component": "remote_i_o_interface"
+    },
+    {
+      "id": "rio3",
+      "label": "RIO-3",
+      "kind": "rio",
+      "level": "L1",
+      "scope": "avanceon",
+      "component": "remote_i_o_interface"
+    },
+    {
+      "id": "pt1",
+      "label": "Pressure transmitter",
+      "kind": "instrument",
+      "level": "L0",
+      "scope": "avanceon",
+      "qty": 2
+    },
+    {
+      "id": "pt2",
+      "label": "Level transmitter",
+      "kind": "instrument",
+      "level": "L0",
+      "scope": "avanceon",
+      "qty": 2
+    },
+    {
+      "id": "pt3",
+      "label": "Flow transmitter",
+      "kind": "instrument",
+      "level": "L0",
+      "scope": "avanceon",
+      "qty": 2
+    }
+  ],
+  "links": [
+    {
+      "from": "ws",
+      "to": "plc1",
+      "cable": "ethernet",
+      "assumed": true
+    },
+    {
+      "from": "pt1",
+      "to": "rio1",
+      "cable": "hardwired",
+      "label": "4-20 mA",
+      "assumed": true
+    },
+    {
+      "from": "pt2",
+      "to": "rio2",
+      "cable": "hardwired",
+      "label": "4-20 mA",
+      "assumed": true
+    },
+    {
+      "from": "pt3",
+      "to": "rio3",
+      "cable": "hardwired",
+      "label": "4-20 mA",
+      "assumed": true
+    }
+  ],
+  "rings": [
+    {
+      "id": "r1",
+      "label": "Fiber Optic Ring",
+      "first": "plc1",
+      "members": [
+        "rio1",
+        "rio2",
+        "rio3"
+      ]
+    }
+  ],
+  "notes": [
+    "Example only: a fibre ring from the main PLC through three RIO panels, back to the main PLC."
+  ]
+}

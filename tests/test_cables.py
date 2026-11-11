@@ -23,12 +23,22 @@ class CableTests(unittest.TestCase):
     def test_client_colour_standard(self):
         self.assertEqual(self.c.status, "client")
         self.assertEqual({i: c["color"] for i, c in self.c.by_id.items()},
-                         {"ethernet": "#0000FF", "fibre": "#FF0000", "modbus": "#00B000", "bacnet": "#7030A0", "hardwired": "#000000"})
-        self.assertEqual(self.c.line_style("fibre"), ("#FF0000", 1))
+                         {"ethernet": "#0000FF", "fibre": "#00B000", "modbus": "#FF0000", "bacnet": "#7030A0", "hardwired": "#000000"})
+        self.assertEqual(self.c.line_style("fibre"), ("#00B000", 2))
+
+    def test_dashes_and_arrow_follow_the_avanceon_document(self):
+        pattern = {i: c["pattern"] for i, c in self.c.by_id.items()}
+        self.assertEqual(pattern, {"ethernet": 2, "fibre": 2, "modbus": 1, "bacnet": 1, "hardwired": 1})   # BACnet stays purple solid
+        self.assertEqual(self.c.style("hardwired"), {"color": "#000000", "pattern": 1, "arrow": True})
+        self.assertEqual(self.c.style("ethernet"), {"color": "#0000FF", "pattern": 2, "arrow": False})
+        self.assertEqual([i for i in self.c.by_id if self.c.style(i)["arrow"]], ["hardwired"])
+        self.assertEqual([e["label"] for e in self.c.legend(list(self.c.by_id))],
+                         ["Ethernet Cable", "Fibre Optic Cable", "Modbus Cable", "BACnet Cable", "Hardwired (Inst Cable)"])
+        self.assertTrue(self.c.legend(["hardwired"])[0]["arrow"])
 
     def test_legend_has_only_used_cables_in_table_order(self):
         leg = self.c.legend(["fibre", "ethernet"])
-        self.assertEqual([e["label"] for e in leg], ["Ethernet (Cu)", "Fibre"])
+        self.assertEqual([e["label"] for e in leg], ["Ethernet Cable", "Fibre Optic Cable"])
         self.assertTrue(all(e["kind"] == "line" and e["color"].startswith("#") for e in leg))
 
     def test_unknown_cable_is_an_error(self):
@@ -42,6 +52,8 @@ class CableTests(unittest.TestCase):
         for bad in (dict(ok, color="112233"), dict(ok, pattern=3), dict(ok, label=" ")):
             with self.assertRaises(cables.CableError):
                 cables.Cables(tmp_json({"cables": [bad]}))
+        with self.assertRaises(cables.CableError):
+            cables.Cables(tmp_json({"cables": [dict(ok, arrow="yes")]}))        # arrow must be a real boolean
         with self.assertRaises(cables.CableError):
             cables.Cables(tmp_json({"cables": [ok, ok]}))
         with self.assertRaises(cables.CableError):

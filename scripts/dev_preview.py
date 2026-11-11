@@ -46,6 +46,33 @@ def render(page, path):
                                 (p[0] + (q[0] - p[0]) * min(i + 1, n) / n, p[1] + (q[1] - p[1]) * min(i + 1, n) / n)], fill=s["line"], width=max(1, int(s["lw"] * 1.3)))
                 else:
                     d.line([p, q], fill=s["line"], width=max(1, int(s["lw"] * 1.3)))
+            if s.get("arrow") and len(pts) >= 2:                          # arrowhead at the last point
+                (x0, y0), (x1, y1) = pts[-2], pts[-1]
+                ln = max(1e-6, ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5)
+                ux, uy = (x1 - x0) / ln, (y1 - y0) / ln
+                d.polygon([(x1, y1), (x1 - 9 * ux + 4 * uy, y1 - 9 * uy - 4 * ux), (x1 - 9 * ux - 4 * uy, y1 - 9 * uy + 4 * ux)], fill=s["line"])
+        elif s["kind"] == "polygon":
+            pts = [(X(x), Y(y)) for x, y in s["pts"]]
+            d.polygon(pts, fill=s["fill"], outline=s["line"])
+            if s["text"]:
+                f = _font(s["size"])
+                w = d.textlength(s["text"], font=f)
+                d.text((X(s["x"] + s["w"] / 2) - w / 2, Y(s["y"] + s["h"] / 2) - f.size / 2), s["text"], fill="black", font=f)
+        elif s.get("rot") and s["text"]:                               # text turned to read upwards (title strips)
+            if s["fill"] or s["line"]:
+                d.rectangle([X(s["x"]), Y(s["y"] + s["h"]), X(s["x"] + s["w"]), Y(s["y"])], fill=s["fill"], outline=s["line"], width=1)
+            bw, bh = int(s["h"] * DPI), int(s["w"] * DPI)
+            layer = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+            ld = ImageDraw.Draw(layer)
+            f = _font(s["size"])
+            lines = _wrap(ld, s["text"], f, bw - 4)
+            lh = f.size * 1.15
+            yy = (bh - lh * len(lines)) / 2
+            for ln in lines:
+                ld.text(((bw - ld.textlength(ln, font=f)) / 2, yy), ln, fill=s.get("color") or "black", font=f)
+                yy += lh
+            layer = layer.rotate(90, expand=True)
+            im.paste(layer, (int(X(s["x"])), int(Y(s["y"] + s["h"]))), layer)
         else:
             box = [X(s["x"]), Y(s["y"] + s["h"]), X(s["x"] + s["w"]), Y(s["y"])]
             if s["fill"] or s["line"]:
@@ -54,7 +81,7 @@ def render(page, path):
                 f = _font(s["size"])
                 lines = _wrap(d, s["text"], f, box[2] - box[0] - 4)
                 lh = f.size * 1.15
-                y = box[1] + (box[3] - box[1] - lh * len(lines)) / 2 if s["valign"] == 1 else (box[3] - lh * len(lines) if s["valign"] == 0 else box[1])
+                y = box[1] + (box[3] - box[1] - lh * len(lines)) / 2 if s["valign"] == 1 else (box[1] if s["valign"] == 0 else box[3] - lh * len(lines))   # Visio: 0 top, 1 middle, 2 bottom
                 for ln in lines:
                     w = d.textlength(ln, font=f)
                     x = box[0] + 2 if s["halign"] == 0 else (box[2] - w - 2 if s["halign"] == 2 else (box[0] + box[2] - w) / 2)

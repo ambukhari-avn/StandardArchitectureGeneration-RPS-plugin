@@ -1,0 +1,35 @@
+{
+  "_note": "Components added by hand. They live in this file, not in components.json, because scripts/import_dataset.py rewrites components.json from the Excel workbook and would erase manual additions. Same schema as components.json. The ids here must not repeat an id of components.json (Components() raises if they do).",
+  "source": {
+    "file": "components_extra.json",
+    "sheet": null
+  },
+  "components": [
+    {
+      "id": "network_switch_approved",
+      "layer": "Network",
+      "title": "Network switch (approved symbol)",
+      "label": "Network switch",
+      "brand": null,
+      "part_number": null,
+      "confidence": "PLACEHOLDER picture: replace data/icons/network_switch_approved.png with the approved Avanceon switch symbol (black rack-mounted multi-port switch), keeping the file name",
+      "image_file_name": null,
+      "picture": "icons/network_switch_approved.png",
+      "duplicate_of": null,
+      "source_row": null
+    },
+    {
+      "id": "fo_patch_panel",
+      "layer": "Network",
+      "title": "FO patch panel (approved symbol)",
+      "label": "FO patch panel",
+      "brand": null,
+      "part_number": null,
+      "confidence": "Existing patch panel picture reused until the owner supplies a dedicated approved FO patch panel symbol",
+      "image_file_name": null,
+      "picture": "icons/patch_panel.png",
+      "duplicate_of": null,
+      "source_row": null
+    }
+  ]
+}
