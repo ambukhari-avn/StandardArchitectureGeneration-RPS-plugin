@@ -16,14 +16,14 @@ The drawing area is 15.9 in wide and 9.9 in high; the footer sits below it.
 
 ## project (footer)
 Only values the user or the RFQ gave. A missing value prints `TBC` (`doc_name`, `revision` and `sheet` default to `Architecture`, `R0` and `1`). The older keys `contractor` and `rev` (`R0/1`) are still read as `client` and `revision` + `sheet`.
-The footer also always shows two fixed scope boxes between Notes and Legend: **Avanceon Scope** (light blue) and **Other Scope** (light green).
+The footer also always shows two fixed scope boxes between Notes and Legend: **Avanceon Scope** (light blue) and **Other Scope** (light pink).
 Size is always A3. A value too long for its footer cell stops the build.
 
 ## shapes
 | field | meaning |
 |---|---|
 | `id` | required, unique |
-| `kind` | `box` (default: a **device**, always drawn as its picture with the caption underneath, never as a box), `zone` (background rectangle with a title, drawn behind everything), `group` (dashed rounded container with a blue title pill, e.g. "Redundant PLC System"; needs `w`, `h`), `pill` (a light-blue label, e.g. "Field Instruments & Devices", that may sit on a line), `text` (no border) |
+| `kind` | `box` (default: a **device**, always drawn as its picture with the caption underneath, never as a box), `zone` (background rectangle with a title, drawn behind everything), `group` (dashed rounded container, no title printed; needs `w`, `h`), `pill` (accepted for older files, not drawn), `text` (no border) |
 | `label` | caption under the picture (bold) / the zone or group title / the pill text. A second line (`\n`) or `sublabel` is printed under it in blue, e.g. "SCADA Server" + "(Primary)" |
 | `sublabel` | optional blue second caption line |
 | `x`, `y` | required, top-left corner |
@@ -72,3 +72,18 @@ shapes) fix the ellipse yourself. Do not draw the ring as your own shape: use `r
 - Stops (`NOT BUILT`): a line names an unknown shape or cable; a shape has no id, x or y; unknown component; unreadable file.
 - Repairs and warns: a shape outside the drawing area is moved in; a picture that is missing or not a PNG becomes a box; a label too
   long for its box is printed at 6 pt; two shapes overlapping; a line passing through a shape.
+
+## Page size is fixed
+The page is always A3 landscape. Coordinates, `via` points or ring boxes that fall outside the drawing area are pulled back inside and reported in `warnings`; the page never grows.
+
+## Scope blocks
+With "layers", each shape's "scope" ("avanceon" or "other") decides which block of its layer it sits on: Avanceon left (light blue), other scope right (light pink). No scope text is printed in the blocks.
+
+## Cabling rules (automatic)
+Every cable in `lines` is routed by the program, so a prompt only needs `from`, `to` and `cable`:
+- square corners only; leaves and enters each device at a right angle, ON its edge, facing the other device when that is shortest;
+- never through a device (it goes round); straight when the devices line up, otherwise as few bends as possible;
+- parallel cables take separate tracks; several cables on one side of a device are spread along that side;
+- unavoidable crossings are drawn as a small hop (the horizontal cable hops over the vertical one); T-junctions are not hopped;
+- in a layered drawing cables stay out of the dark-blue band.
+Manual instructions always win, per cable: `"from_side"` / `"to_side"` (`left`, `right`, `top`, `bottom`), `"via": [[x, y], ...]` (followed exactly, corners squared), `"straight": true` (prefer a straight cable). FO ring node links keep their own look.

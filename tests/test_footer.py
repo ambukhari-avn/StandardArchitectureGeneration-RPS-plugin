@@ -79,7 +79,7 @@ class FooterTests(unittest.TestCase):
         self.assertEqual(boxes["scope:avanceon"]["text"], "Avanceon Scope")
         self.assertEqual(boxes["scope:other"]["text"], "Other Scope")
         self.assertEqual(boxes["scope:avanceon"]["fill"].upper(), "#CFE8F7")
-        self.assertEqual(boxes["scope:other"]["fill"].upper(), "#D5EFD3")
+        self.assertEqual(boxes["scope:other"]["fill"].upper(), "#F8D7DE")
         legend_x = footer.X0 + footer.LEFT_W + footer.NOTES_W + footer.SCOPE_W
         for b in boxes.values():
             self.assertLessEqual(b["x"] + b["w"], legend_x + 1e-6)

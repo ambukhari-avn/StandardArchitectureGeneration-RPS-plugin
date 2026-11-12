@@ -87,7 +87,13 @@ class DiagramTests(unittest.TestCase):
     def test_a_line_through_another_shape_is_warned_not_refused(self):
         s = spec()
         s["shapes"].append({"id": "c", "label": "C", "x": 3, "y": 1})
+        s["lines"][0]["via"] = [[3.5, 1.5]]                                  # a hand-routed cable that runs through C
         self.assertTrue(any("passes through shape 'c'" in w for w in build(s)["warnings"]))
+
+    def test_an_automatic_cable_goes_round_a_shape_in_its_way(self):
+        s = spec()
+        s["shapes"].append({"id": "c", "label": "C", "x": 3, "y": 1})
+        self.assertFalse(any("passes through" in w for w in build(s)["warnings"]))
 
     def test_a_long_label_is_kept_and_warned(self):
         s = spec()
@@ -157,7 +163,7 @@ class RingTests(unittest.TestCase):
     def test_single_row_puts_the_ring_below_it(self):
         r = build(ring_spec(3, 0))
         (e,) = self.ring(r)
-        row_bottom = min(s["y"] for s in r["page"].shapes if (s["key"] or "").endswith(":scope"))
+        row_bottom = min(s["y"] for s in r["page"].shapes if s["kind"] == "image" and (s["key"] or "").startswith("component:"))
         self.assertLess(e["y"] + e["h"], row_bottom)
 
     def test_ellipse_is_written_as_a_visio_ellipse(self):
@@ -203,28 +209,54 @@ class LayerTests(unittest.TestCase):
                                                                                                           ["enterprise", "dmz", "operations", "scada", "control", "field"]})))
         self.assertGreater(two[0]["h"], 2 * six[0]["h"])
 
+    def blocks(self, r):
+        return [s for s in r["page"].shapes if (s["key"] or "").startswith("scope-block:")]
+
+    def pictures(self, r, p):
+        return sorted((s for s in r["page"].shapes if s["kind"] == "image" and p["y"] <= s["y"] <= p["y"] + p["h"]), key=lambda s: s["x"])
+
     def test_shapes_are_spread_evenly_and_centred_in_their_layer(self):
         r = build(layer_spec(["scada", "field"], {"scada": 3, "field": 4}))
         ps = {p["key"][6:]: p for p in self.panels(r)}
-        tiles = sorted((s for s in r["page"].shapes if (s["key"] or "").endswith(":scope")), key=lambda s: (-s["y"], s["x"]))
         for L, n in (("scada", 3), ("field", 4)):
             p = ps[L]
-            boxes = [t for t in tiles if p["y"] <= t["y"] and t["y"] + t["h"] <= p["y"] + p["h"] + 1e-6]
-            self.assertEqual(len(boxes), n)
-            gaps = [boxes[0]["x"] - (p["x"] + B.BAND_W)] + [b["x"] - (a["x"] + a["w"]) for a, b in zip(boxes, boxes[1:])] \
-                + [p["x"] + p["w"] - (boxes[-1]["x"] + boxes[-1]["w"])]
-            self.assertLess(max(gaps[1:-1]) - min(gaps[1:-1]) if n > 2 else 0, 1e-6)           # equal gaps between shapes
-            for b in boxes:
-                self.assertAlmostEqual(b["y"] + b["h"] / 2, p["y"] + p["h"] / 2, 3)             # vertically centred
-                self.assertGreaterEqual(b["x"], p["x"] + B.BAND_W)
+            pics = self.pictures(r, p)
+            self.assertEqual(len(pics), n)
+            centres = [s["x"] + s["w"] / 2 for s in pics]
+            steps = [b - a for a, b in zip(centres, centres[1:])]
+            self.assertLess(max(steps) - min(steps), 1e-6)                                       # equal spacing
+            self.assertGreater(centres[0], p["x"] + B.BAND_W)
+            self.assertLess(centres[-1], p["x"] + p["w"])
 
-    def test_band_is_dark_blue_with_white_rotated_name_and_scope_boxes_are_outlined(self):
+    def test_one_scope_block_per_scope_per_layer_no_text_and_no_tile_behind_devices(self):
+        spec = layer_spec(["scada"], {"scada": 2})
+        spec["shapes"] += [{"id": "o1", "label": "O1", "layer": "scada", "scope": "other", "component": "industrial_switch"}]
+        r = build(spec)
+        bl = sorted(self.blocks(r), key=lambda s: s["x"])
+        self.assertEqual([b["key"].split(":")[-1] for b in bl], ["avanceon", "other"])          # Avanceon left, other right
+        self.assertEqual([b["fill"].upper() for b in bl], ["#CFE8F7", "#F8D7DE"])
+        self.assertLess(bl[0]["x"] + bl[0]["w"], bl[1]["x"])
+        self.assertTrue(all(not b["text"] for b in bl))                                          # no scope wording inside the blocks
+        self.assertFalse(any((s["key"] or "").endswith(":scope") for s in r["page"].shapes))
+        self.assertFalse(any("scope" in (s["text"] or "").lower() and "Scope" not in (s["text"] or "") for s in r["page"].shapes))
+        pics = [s for s in r["page"].shapes if s["kind"] == "image" and (s["key"] or "").startswith("component:")]
+        self.assertEqual([sum(1 for s in pics if b["x"] <= s["x"] <= b["x"] + b["w"]) for b in bl], [2, 1])
+
+    def test_a_layer_with_one_scope_has_one_full_width_block_and_none_without_scope(self):
+        r = build(layer_spec(["scada"], {"scada": 2}))
+        (b,) = self.blocks(r)
+        self.assertGreater(b["w"], B.AREA_W - 2 * B.BAND_W - 0.5)
+        spec = layer_spec(["scada"], {"scada": 2})
+        for s in spec["shapes"]:
+            del s["scope"]
+        self.assertEqual(self.blocks(build(spec)), [])
+
+    def test_band_is_dark_blue_with_white_rotated_name(self):
         r = build(layer_spec(["scada"], {"scada": 1}))
         band = [s for s in r["page"].shapes if (s["key"] or "").startswith("layer-band:")][0]
         name = [s for s in r["page"].shapes if (s["key"] or "").startswith("layer-name:")][0]
-        self.assertEqual((band["fill"], name["text"], name["text_angle"]), (B.BAND_FILL, "SCADA Layer", 90))
-        box = [s for s in r["page"].shapes if (s["key"] or "").endswith(":scope")][0]
-        self.assertEqual((box["fill"].upper(), box["line"]), ("#CFE8F7", B.SCOPE_LINE))
+        self.assertEqual((band["fill"], name["text"], name["text_angle"], name["color"]), (B.BAND_FILL, "SCADA Layer", 90, "#FFFFFF"))
+        self.assertEqual(self.blocks(r)[0]["line"], B.SCOPE_LINE)
 
     def test_vsdx_has_rounded_panels_and_rotated_names(self):
         r = build(layer_spec(["scada", "field"], {"scada": 1, "field": 1}))
@@ -289,28 +321,24 @@ class PictureTests(unittest.TestCase):
         r = build(self.spec(self.device(h=0.2)))
         self.assertTrue(any("raised" in w for w in r["warnings"]))
 
-    def test_scope_colour_is_a_tile_behind_the_picture(self):
+    def test_scope_alone_adds_no_tile_behind_a_picture(self):
         r = build(self.spec(self.device(scope="other")))
-        tile = [s for s in r["page"].shapes if (s["key"] or "").endswith(":scope")]
-        self.assertEqual([(t["fill"].upper(), t["line"]) for t in tile], [("#D5EFD3", B.SCOPE_LINE)])
-        self.assertLess([s["id"] for s in r["page"].shapes].index(tile[0]["id"]),
-                        [s["id"] for s in r["page"].shapes if s["kind"] == "image" and (s["key"] or "").startswith("image:")][0])   # tile is behind
+        self.assertFalse(any((s["key"] or "").endswith(":scope") for s in r["page"].shapes))
 
-    def test_group_has_a_dashed_rounded_container_and_a_blue_title_pill(self):
+    def test_group_is_a_dashed_rounded_container_without_a_title_pill(self):
         r = build(self.spec({"id": "g", "kind": "group", "label": "Redundant PLC System", "x": 1, "y": 1, "w": 6, "h": 3}, self.device()))
         box = [s for s in r["page"].shapes if (s["key"] or "") == "shape:g"][0]
-        pill = [s for s in r["page"].shapes if s["text"] == "Redundant PLC System"][0]
-        self.assertEqual((box["pattern"], box["rounding"] > 0, pill["fill"], pill["color"]), (2, True, B.PILL_BLUE, "#FFFFFF"))
-        self.assertGreater(pill["y"] + pill["h"], box["y"] + box["h"])           # the pill straddles the container's top edge
+        self.assertEqual((box["pattern"], box["rounding"] > 0), (2, True))
+        self.assertNotIn("Redundant PLC System", [s["text"] for s in r["page"].shapes])
         with self.assertRaises(B.BuildError):
             build(self.spec({"id": "g", "kind": "group", "label": "no size", "x": 1, "y": 1}))
 
-    def test_pill_label_sits_on_top_of_a_line_without_a_crossing_warning(self):
+    def test_pill_labels_are_no_longer_drawn_but_old_files_still_build(self):
         r = build(self.spec(self.device(id="a", x=1, y=1), self.device(id="b", x=9, y=1),
                             {"id": "p", "kind": "pill", "label": "Field Instruments & Devices", "x": 3.5, "y": 1.4}) |
                   {"lines": [{"from": "a", "to": "b", "cable": "hardwired"}]})
+        self.assertNotIn("Field Instruments & Devices", [s["text"] for s in r["page"].shapes])
         self.assertFalse(any("passes through" in w for w in r["warnings"]))
-        self.assertIn("Field Instruments & Devices", [s["text"] for s in r["page"].shapes])
 
 
 class BackgroundTests(unittest.TestCase):
@@ -333,6 +361,25 @@ class BackgroundTests(unittest.TestCase):
         self.assertEqual(im.getpixel((0, 0))[3], 0)                                     # corner transparent
         self.assertEqual(im.getpixel((im.width // 2, im.height // 2)), (255, 255, 255, 255))   # inner white kept
         self.assertLess(im.width, 300)                                                  # trimmed to the device
+
+    def test_a_thin_frame_and_a_soft_drop_shadow_are_removed_too(self):
+        import pictures
+        from PIL import Image, ImageDraw, ImageFilter
+        im = Image.new("RGB", (300, 220), (255, 255, 255))
+        sh = Image.new("L", (300, 220), 0)
+        ImageDraw.Draw(sh).rectangle([70, 60, 250, 175], fill=130)
+        im.paste((110, 110, 110), (0, 0), sh.filter(ImageFilter.GaussianBlur(7)))
+        ImageDraw.Draw(im).rectangle([60, 40, 240, 160], fill=(40, 60, 120))
+        ImageDraw.Draw(im).rectangle([0, 0, 299, 219], outline=(205, 205, 205))        # 1 px frame, as many web photos have
+        p = os.path.join(tempfile.mkdtemp(), "f.png")
+        im.save(p)
+        out, note = pictures.prepare(p)
+        self.assertIsNone(note)
+        res = Image.open(out).convert("RGBA")
+        self.assertLess(res.width, 215)                                                  # frame gone: cropped to the device (and its faint edge)
+        light = sum(1 for x in range(res.width) for y in range(res.height)
+                    if res.getpixel((x, y))[3] > 100 and min(res.getpixel((x, y))[:3]) > 150)
+        self.assertLess(light, 0.02 * res.width * res.height)                           # no light shadow or frame left opaque
 
     def test_light_grey_background_too(self):
         import pictures
@@ -387,6 +434,179 @@ class BackgroundTests(unittest.TestCase):
         r = build(s)
         img = [x for x in r["page"].shapes if (x["key"] or "").startswith("image:")][0]
         self.assertIn("arch_pictures", img["image"])                                    # the cleaned copy is what is drawn
+
+
+class StaysA3Tests(unittest.TestCase):
+    """Whatever the file asks for, the page is A3 and everything is inside it (Visio would otherwise grow the page)."""
+    proj = dict(end_user="E", client="C", project="P", prepared_by="X", checked_by="Y", approved_by="Z")
+
+    def dev(self, i, **kw):
+        d = {"id": i, "label": i, "component": "industrial_switch", "x": 2, "y": 2}
+        d.update(kw)
+        return d
+
+    def assert_everything_on_the_sheet(self, r):
+        from vsdx_writer import A3_H, A3_W
+        for s in r["page"].shapes:
+            xs, ys = [s["x"], s["x"] + s["w"]], [s["y"], s["y"] + s["h"]]
+            if s["pts"]:
+                xs += [p[0] for p in s["pts"]]
+                ys += [p[1] for p in s["pts"]]
+            self.assertGreaterEqual(min(xs), -1e-6, s["key"])
+            self.assertLessEqual(max(xs), A3_W + 1e-6, s["key"])
+            self.assertGreaterEqual(min(ys), -1e-6, s["key"])
+            self.assertLessEqual(max(ys), A3_H + 1e-6, s["key"])
+
+    def test_the_saved_page_is_a3_and_never_resizes_itself(self):
+        import re
+        r = build({"project": self.proj, "shapes": [self.dev("a")]})
+        with zipfile.ZipFile(r["out"]) as z:
+            p = z.read("visio/pages/pages.xml").decode()
+        self.assertAlmostEqual(float(re.search(r"N='PageWidth' V='([\d.]+)'", p).group(1)), 420 / 25.4, 3)
+        self.assertAlmostEqual(float(re.search(r"N='PageHeight' V='([\d.]+)'", p).group(1)), 297 / 25.4, 3)
+        self.assertEqual(re.search(r"N='DrawingResizeType' V='(\d+)'", p).group(1), "2")      # 2 = never resize
+
+    def test_far_out_via_points_are_pulled_inside_with_a_warning(self):
+        s = {"project": self.proj, "shapes": [self.dev("a"), self.dev("b", x=8)],
+             "lines": [{"from": "a", "to": "b", "cable": "ethernet", "via": [[99, -40], [-30, 77]]}]}
+        r = build(s)
+        self.assertTrue(any("via point" in w and "moved inside" in w for w in r["warnings"]))
+        self.assert_everything_on_the_sheet(r)
+
+    def test_a_huge_or_far_ring_box_is_pulled_inside(self):
+        s = {"project": self.proj, "shapes": [self.dev("a"), self.dev("b", x=8), self.dev("c", x=4, y=5)],
+             "rings": [{"id": "r", "nodes": ["a", "b", "c"], "x": 20, "y": -9, "w": 60, "h": 40}]}
+        r = build(s)
+        self.assertTrue(any("ring ellipse did not fit" in w for w in r["warnings"]))
+        self.assert_everything_on_the_sheet(r)
+
+    def test_a_ring_spanning_the_whole_width_does_not_stick_out(self):
+        shapes = [self.dev("n%d" % i, x=0.2 + i * 2.5, y=3) for i in range(7)]
+        r = build({"project": self.proj, "shapes": shapes, "rings": [{"id": "r", "nodes": [s["id"] for s in shapes]}]})
+        self.assert_everything_on_the_sheet(r)
+        ell = [s for s in r["page"].shapes if s["kind"] == "ellipse"][0]
+        self.assertLessEqual(ell["x"] + ell["w"], B.MARGIN + B.AREA_W + 1e-6)
+
+    def test_safety_net_catches_anything_still_outside_and_keeps_clear_of_the_footer(self):
+        from vsdx_writer import A3_H, A3_W, Page
+        import footer
+        pg = Page()
+        n = len(pg.shapes)
+        pg.rect("icon", 30, 30, 2, 2)                              # far off the sheet
+        pg.rect("icon", 5, 0.5, 2, 0.5)                             # on top of the footer
+        pg.line([(1, 1), (50, 50)], "#000000")
+        warns = []
+        moved = B.keep_on_page(pg, n, warns)
+        self.assertEqual(moved, 3)
+        self.assertEqual(len(warns), 3)
+        for s in pg.shapes:
+            self.assertLessEqual(s["x"] + s["w"], A3_W)
+            self.assertLessEqual(s["y"] + s["h"], A3_H)
+            self.assertGreaterEqual(s["y"], footer.TOP)
+
+    def test_normal_drawings_are_not_touched_by_the_safety_net(self):
+        r = build({"project": self.proj, "layers": ["scada", "field"],
+                   "shapes": [self.dev("a", layer="scada"), self.dev("b", layer="field")]})
+        self.assertFalse(any("outside the page" in w for w in r["warnings"]))
+
+
+class CableRuleTests(unittest.TestCase):
+    """Standard cabling rules: square, end to end, round devices, spread, hops; manual instructions win."""
+    proj = dict(end_user="E", client="C", project="P", prepared_by="X", checked_by="Y", approved_by="Z")
+
+    def dev(self, i, x, y, **kw):
+        d = {"id": i, "label": i, "component": "industrial_switch", "x": x, "y": y}
+        d.update(kw)
+        return d
+
+    def cables(self, r):
+        return [s for s in r["page"].shapes if s["kind"] == "line" and "->" in (s["key"] or "")]
+
+    def rects(self, r):
+        return {(s["key"] or "")[len("component:"):]: None for s in r["page"].shapes}
+
+    def test_every_segment_is_horizontal_or_vertical_and_ends_on_the_device_edges(self):
+        import router
+        shapes = [self.dev("a", 1, 1), self.dev("b", 7, 4), self.dev("c", 12, 1), self.dev("d", 3, 6)]
+        lines = [{"from": "a", "to": "b", "cable": "ethernet"}, {"from": "b", "to": "c", "cable": "modbus"},
+                 {"from": "a", "to": "d", "cable": "hardwired"}, {"from": "d", "to": "c", "cable": "ethernet"}]
+        r = build({"project": self.proj, "shapes": shapes, "lines": lines})
+        by = {s["id"]: B.rect_of(s) for s in B.prepare({"project": self.proj, "shapes": shapes, "lines": lines}, B.Components(), B.Cables(), ".")[0]}
+        for c, cab in zip(lines, self.cables(r)):
+            pts = cab["pts"]
+            for p, q in zip(pts, pts[1:]):
+                if abs(p[0] - q[0]) + abs(p[1] - q[1]) > 0.1:                                          # (hop arcs are made of tiny pieces)
+                    self.assertTrue(abs(p[0] - q[0]) < 1e-6 or abs(p[1] - q[1]) < 1e-6, (c, pts))  # no diagonal
+            for end, other, first in ((c["from"], pts[1], pts[0]), (c["to"], pts[-2], pts[-1])):
+                x, y, w, h = by[end]
+                on_edge = (abs(first[0] - x) < 1e-6 or abs(first[0] - x - w) < 1e-6) and y - 1e-6 <= first[1] <= y + h + 1e-6 \
+                    or (abs(first[1] - y) < 1e-6 or abs(first[1] - y - h) < 1e-6) and x - 1e-6 <= first[0] <= x + w + 1e-6
+                self.assertTrue(on_edge, (end, first))                                                 # starts / ends on the device edge
+            for sid, rect in by.items():
+                if sid not in (c["from"], c["to"]):
+                    self.assertFalse(B.crosses(pts, rect), (c, sid))                                   # never through another device
+
+    def test_a_cable_goes_round_a_device_in_its_way(self):
+        shapes = [self.dev("a", 1, 3), self.dev("m", 6, 3), self.dev("b", 11, 3)]
+        r = build({"project": self.proj, "shapes": shapes, "lines": [{"from": "a", "to": "b", "cable": "ethernet"}]})
+        (cab,) = self.cables(r)
+        self.assertGreaterEqual(len(cab["pts"]), 4)                                                    # it bends round m
+        self.assertFalse(any("passes through" in w for w in r["warnings"]))
+
+    def test_aligned_devices_get_one_straight_cable(self):
+        r = build({"project": self.proj, "shapes": [self.dev("a", 2, 2), self.dev("b", 9, 2)], "lines": [{"from": "a", "to": "b", "cable": "ethernet"}]})
+        (cab,) = self.cables(r)
+        self.assertEqual(len(cab["pts"]), 2)
+
+    def test_cables_on_the_same_side_are_spread_apart(self):
+        shapes = [self.dev("hub", 7, 1), self.dev("a", 2, 6), self.dev("b", 7, 6), self.dev("c", 12, 6)]
+        lines = [{"from": "hub", "to": k, "cable": "ethernet"} for k in "abc"]
+        r = build({"project": self.proj, "shapes": shapes, "lines": lines})
+        starts = sorted(round(c["pts"][0][0], 3) for c in self.cables(r) if abs(c["pts"][0][1] - self.cables(r)[0]["pts"][0][1]) < 1e-6)
+        self.assertEqual(len(starts), len(set(starts)))                                               # no two cables start at the same point
+        self.assertGreater(len(set(round(c["pts"][0][0], 2) for c in self.cables(r))), 1)
+
+    def test_a_crossing_is_drawn_as_a_hop_and_a_t_junction_is_not(self):
+        import router
+        flat = [[(0, 5), (10, 5)], [(5, 0), (5, 10)]]
+        hopped = router.add_hops(flat)
+        self.assertGreater(len(hopped[0]), 2)                                                          # the horizontal cable hops
+        self.assertEqual(hopped[1], flat[1])                                                           # the vertical one is untouched
+        self.assertGreater(max(p[1] for p in hopped[0]), 5.0)
+        t_junction = router.add_hops([[(0, 5), (10, 5)], [(5, 0), (5, 5)]])
+        self.assertEqual(t_junction[0], [(0, 5), (10, 5)])
+
+    def test_manual_sides_win(self):
+        shapes = [self.dev("a", 2, 2), self.dev("b", 9, 2)]
+        r = build({"project": self.proj, "shapes": shapes, "lines": [{"from": "a", "to": "b", "cable": "ethernet", "from_side": "top", "to_side": "top"}]})
+        (cab,) = self.cables(r)
+        a = [s for s in B.prepare({"project": self.proj, "shapes": shapes}, B.Components(), B.Cables(), ".")[0] if s["id"] == "a"][0]
+        x, y, w, h = B.rect_of(a)
+        self.assertAlmostEqual(cab["pts"][0][1], y + h, 3)                                             # leaves the top of a
+        self.assertGreater(cab["pts"][1][1], y + h)                                                    # and goes up first
+        self.assertAlmostEqual(cab["pts"][-1][1], y + h, 3)                                            # arrives at the top of b
+
+    def test_manual_via_points_are_followed_and_squared(self):
+        shapes = [self.dev("a", 2, 2), self.dev("b", 9, 6)]
+        r = build({"project": self.proj, "shapes": shapes, "lines": [{"from": "a", "to": "b", "cable": "ethernet", "via": [[5, 1.0], [7.5, 4.0]]}]})
+        (cab,) = self.cables(r)
+        for p, q in zip(cab["pts"], cab["pts"][1:]):
+            self.assertTrue(abs(p[0] - q[0]) < 1e-6 or abs(p[1] - q[1]) < 1e-6)
+        for vx, vy in ((5, 1.0), (7.5, 4.0)):
+            self.assertTrue(any(abs(p[0] - (B.MARGIN + vx)) < 1e-6 and abs(p[1] - (B.TOP - vy)) < 1e-6 for p in cab["pts"]))   # passes through the given point
+
+    def test_bad_side_name_is_ignored_with_a_warning(self):
+        r = build({"project": self.proj, "shapes": [self.dev("a", 2, 2), self.dev("b", 9, 2)],
+                   "lines": [{"from": "a", "to": "b", "cable": "ethernet", "from_side": "middle"}]})
+        self.assertTrue(any("from_side" in w for w in r["warnings"]))
+
+    def test_layered_drawing_keeps_cables_out_of_the_layer_band(self):
+        shapes = [dict(self.dev("a", 0, 0), layer="scada", scope="avanceon"), dict(self.dev("b", 0, 0), layer="field", scope="avanceon")]
+        for s in shapes:
+            del s["x"], s["y"]
+        r = build({"project": self.proj, "layers": ["scada", "field"], "shapes": shapes, "lines": [{"from": "a", "to": "b", "cable": "ethernet"}]})
+        for cab in self.cables(r):
+            self.assertTrue(all(p[0] >= B.MARGIN + B.BAND_W for p in cab["pts"]))
 
 
 if __name__ == "__main__":

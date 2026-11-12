@@ -184,6 +184,7 @@ def write_vsdx(page, out, base, title="Architecture"):
                 t = data.decode()
                 t = re.sub(r"(N='PageWidth' V=')[^']*", r"\g<1>%s" % page.w, t)
                 t = re.sub(r"(N='PageHeight' V=')[^']*", r"\g<1>%s" % page.h, t)
+                t = re.sub(r"(N='DrawingResizeType' V=')[^']*", r"\g<1>2", t)       # 2 = the page never resizes itself: it stays A3
                 data = view(t).encode()
             elif n == "visio/windows.xml":
                 data = view(data.decode()).encode()

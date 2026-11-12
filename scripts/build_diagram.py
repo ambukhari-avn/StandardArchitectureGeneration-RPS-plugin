@@ -19,6 +19,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import footer
 import pictures
+import router
 from cables import CableError, Cables
 from components import Components
 from draw import BOX_FILL, BOX_LINE, BOX_SIZES, LABEL_SIZES, LABEL_ZONE, draw_picture
@@ -158,9 +159,7 @@ def prepare(spec, comps, cables, spec_dir):
             if scope not in footer.SCOPE:
                 warnings.append('%s: scope must be "avanceon" or "other"; ignored' % where)
             else:
-                line = SCOPE_LINE
-                if fill is None or pic:                                 # a device picture sits on a scope-coloured tile
-                    fill = footer.SCOPE[scope][1]
+                pass                                                    # scope is shown as a coloured block per layer (apply_layers), not on the shape
         shapes.append(dict(id=sid, kind=kind, label=label, pic=pic, web=web, key=key, x=cx, y=cy, w=w, h=h, fill=fill,
                            dashed=bool(s.get("dashed")), bold=bool(s.get("bold")), size=_num(s.get("size")), where=where,
                            layer=layer, auto_x=auto_x, line=line, sub=sub, scope=scope if scope in footer.SCOPE else None))
@@ -177,10 +176,25 @@ def prepare(spec, comps, cables, spec_dir):
             cables.get(c.get("cable"))
         except CableError as e:
             errors.append("%s: %s" % (where, e))
-        via = [(MARGIN + p[0], TOP - p[1]) for p in c.get("via", []) if isinstance(p, list) and len(p) == 2 and None not in map(_num, p)]
+        via = []
+        for p in c.get("via", []):
+            if isinstance(p, list) and len(p) == 2 and None not in map(_num, p):
+                px, py = MARGIN + _num(p[0]), TOP - _num(p[1])
+                cx, cy = min(max(px, MARGIN), MARGIN + AREA_W), min(max(py, BOTTOM), TOP)
+                if abs(cx - px) > 0.005 or abs(cy - py) > 0.005:
+                    warnings.append("%s: via point [%s, %s] is outside the drawing area; moved inside" % (where, p[0], p[1]))
+                via.append((cx, cy))
         if len(via) != len(c.get("via", [])):
             warnings.append("%s: some via points were not [x, y] numbers; ignored" % where)
-        lines.append(dict(a=str(c.get("from")), b=str(c.get("to")), cable=c.get("cable"), via=via, where=where))
+        sides = {}
+        for key in ("from_side", "to_side"):
+            v = c.get(key)
+            if v is not None and v not in router.SIDES:
+                warnings.append('%s: %s must be "left", "right", "top" or "bottom"; ignored' % (where, key))
+            elif v is not None:
+                sides[key] = v
+        lines.append(dict(a=str(c.get("from")), b=str(c.get("to")), cable=c.get("cable"), via=via, where=where,
+                          straight=bool(c.get("straight")), **sides))
     if errors:
         raise BuildError("\n  ".join(["cannot draw this file:"] + errors))
     return shapes, lines, warnings
@@ -188,6 +202,7 @@ def prepare(spec, comps, cables, spec_dir):
 
 # ---- layers (Purdue bands) ------------------------------------------------------------------------------------------------------
 LAYER_GAP, BAND_W, LAYER_PAD, LAYER_R = 0.12, 0.45, 0.15, 0.08
+BLOCK_GAP, BLOCK_PAD = 0.12, 0.08                         # space between scope blocks / between a block and its layer edge
 BAND_FILL, PANEL_FILL, PANEL_LINE = "#123A7A", "#E6EEF8", "#8EA9CC"      # dark-blue band, pale panel (the approved layer style)
 
 
@@ -219,17 +234,18 @@ def apply_layers(spec, shapes, warnings):
     panels = []
     for i, t in enumerate(order):
         y = i * (h + LAYER_GAP)
-        panels.append(dict(id=t["id"], label=t["label"], x=0.0, y=y, w=AREA_W, h=h))
+        panels.append(dict(id=t["id"], label=t["label"], x=0.0, y=y, w=AREA_W, h=h, blocks=[]))
         members = [s for s in tagged if s["layer"] == t["id"]]
         if not members:
             continue
         left, width = BAND_W + LAYER_PAD, AREA_W - BAND_W - 2 * LAYER_PAD
-        k = min(1.0, (h - 0.20) / max(s["h"] for s in members))      # a shape taller than its layer is scaled down to fit
-        if all(not s["auto_x"] for s in members):                    # every x given by the file: keep them
-            fit_w = None
-        else:
-            fit_w = (width - (len(members) + 1) * 0.15) / sum(s["w"] for s in members)
-            k = min(k, fit_w)
+        k = min(1.0, (h - 0.30) / max(s["h"] for s in members))      # a shape taller than its layer is scaled down to fit
+        groups = [[s for s in members if s["scope"] == sc] for sc in ("avanceon", "other", None)]
+        groups = [g for g in groups if g]                            # Avanceon on the left, other scope on the right, unscoped last
+        auto = any(s["auto_x"] for s in members)
+        if auto:
+            fixed = (len(groups) - 1) * BLOCK_GAP + sum((len(g) + 1) * 0.15 for g in groups)
+            k = min(k, (width - fixed) / sum(s["w"] for s in members))
         if k < 1.0:
             if k < 0.5:
                 warnings.append("layer %r is very crowded (%d shapes); shapes were reduced to %.0f%% and may be hard to read" % (t["id"], len(members), 100 * max(k, 0.5)))
@@ -238,12 +254,26 @@ def apply_layers(spec, shapes, warnings):
                 s["w"], s["h"] = s["w"] * k, s["h"] * k
         for s in members:
             s["y"] = y + (h - s["h"]) / 2
-        if fit_w is not None:
-            gap = (width - sum(s["w"] for s in members)) / (len(members) + 1)
-            x = left + gap
-            for s in members:
-                s["x"] = x
-                x += s["w"] + gap
+        by, bh = y + BLOCK_PAD, h - 2 * BLOCK_PAD
+        if auto:
+            need = [sum(s["w"] for s in g) + (len(g) + 1) * 0.15 for g in groups]
+            extra = max(0.0, width - sum(need) - (len(groups) - 1) * BLOCK_GAP)
+            x = left
+            for g, nd in zip(groups, need):
+                bw = nd + extra * nd / sum(need)
+                gap = (bw - sum(s["w"] for s in g)) / (len(g) + 1)
+                cx = x + gap
+                for s in g:
+                    s["x"] = cx
+                    cx += s["w"] + gap
+                if g[0]["scope"]:
+                    panels[-1]["blocks"].append(dict(scope=g[0]["scope"], x=x, y=by, w=bw, h=bh))
+                x += bw + BLOCK_GAP
+        else:                                                        # positions given by the file: block = the span of that scope's shapes
+            for g in groups:
+                if g[0]["scope"]:
+                    x0, x1 = min(s["x"] for s in g) - 0.15, max(s["x"] + s["w"] for s in g) + 0.15
+                    panels[-1]["blocks"].append(dict(scope=g[0]["scope"], x=max(x0, left), y=by, w=min(x1, left + width) - max(x0, left), h=bh))
     return panels
 
 
@@ -257,8 +287,11 @@ def draw_layer(page, p):
     pts += [(x + r + r * math.cos(math.radians(180 - 15 * k)), y + h - r + r * math.sin(math.radians(180 - 15 * k))) for k in range(7)]
     pts.append((x + BAND_W, y + h))
     page.poly("zone", pts, fill=BAND_FILL, line=None, key="layer-band:" + p["id"])
+    for b in p.get("blocks", []):                                                # scope blocks: light blue Avanceon, light pink other scope, no text
+        page.rect("zone", MARGIN + b["x"], TOP - b["y"] - b["h"], b["w"], b["h"], fill=footer.SCOPE[b["scope"]][1], line=SCOPE_LINE, lw=0.75,
+                  rounding=0.06, key="scope-block:%s:%s" % (p["id"], b["scope"]))
     size = fit_size(p["label"], h - 0.1, BAND_W - 0.06, (12, 11, 10, 9, 8, 7, 6.5, 6), True)
-    page.rect("text", x, y, BAND_W, h, fill=None, line=None, text=p["label"], size=size, bold=True, text_angle=90,
+    page.rect("text", x, y, BAND_W, h, fill=None, line=None, text=p["label"], size=size, bold=True, text_angle=90, color="#FFFFFF",
               key="layer-name:" + p["id"])
     return size
 
@@ -309,6 +342,16 @@ def prepare_rings(spec, shapes, cables):
 
 
 def ring_ellipse(rects, box, warnings, where):
+    """The ring ellipse, always inside the drawing area. See _ring_ellipse."""
+    x, y, w, h = _ring_ellipse(rects, box, warnings, where)
+    w, h = min(w, AREA_W), min(h, AREA_H)
+    nx, ny = min(max(x, MARGIN), MARGIN + AREA_W - w), min(max(y, BOTTOM), TOP - h)
+    if abs(nx - x) > 0.005 or abs(ny - y) > 0.005:
+        warnings.append("%s: the ring ellipse did not fit in the drawing area; moved inside" % where)
+    return nx, ny, w, h
+
+
+def _ring_ellipse(rects, box, warnings, where):
     """The ring ellipse (x, y, w, h in page inches). From the ring's own x/y/w/h if given; otherwise sized to its nodes: between the
     upper and lower groups of nodes, or just below (else above) the row when all nodes are on one side."""
     if box:
@@ -467,23 +510,47 @@ def draw_shape(page, s):
             page.text(x + 0.05, y + h - 0.28, w - 0.1, 0.25, s["label"], size=size, bold=True, halign=0, valign=0)
     elif s["kind"] == "group":                                      # dashed rounded container with a blue title pill on its top edge
         page.rect("zone", x, y, w, h, fill=s["fill"] or GROUP_FILL, line=GROUP_LINE, lw=1.0, pattern=2, rounding=0.12, key=s["key"])
-        if s["label"]:
-            pw = min(w - 0.3, max(1.6, 0.085 * len(s["label"]) + 0.6))
-            pill(page, x + (w - pw) / 2, y + h - 0.13, pw, 0.26, s["label"], True, s["key"] + ":title")
+        # no title pill: the dashed container stands on its own
     elif s["kind"] == "pill":
-        pill(page, x, y, w, h, s["label"], False, s["key"])
+        pass                                                        # label pills are not drawn any more (kind kept so older files still build)
     elif s["kind"] == "text":
         size, warn = label_size(s, w, h, BOX_SIZES, s["bold"])
         page.text(x, y, w, h, s["label"], size=size, bold=s["bold"], key=s["key"])
     else:                                                           # a device: its picture with the caption underneath, never a box
-        if s.get("scope"):                                          # scope colour as a rounded tile behind the picture and caption
-            page.rect("zone", x, y, w, h, fill=s["fill"], line=s["line"], lw=1.0, rounding=0.08, key=s["key"] + ":scope")
         try:
             fit_size(s["label"], w, LABEL_ZONE, LABEL_SIZES, True)
         except TextFitError:
             warn = "%s: label may not fit under its picture; shorten it or widen the shape (w)" % s["where"]
         draw_picture(page, s["pic"], s["label"], x, y, w, h, s["key"], soft=True, sub=s.get("sub"), bold=True)
     return warn
+
+
+PAGE_INSET = 0.10                                        # nothing may come closer than this to the sheet edge
+
+
+def keep_on_page(page, first_content, warnings):
+    """Last safety net: every shape and line after the footer (page.shapes[first_content:]) is moved inside the A3 sheet and kept clear of the
+    footer; a shape bigger than that region is shrunk. Without it, Visio may enlarge the page to fit a stray element. Returns how many moved."""
+    x0, x1 = PAGE_INSET, A3_W - PAGE_INSET
+    y0, y1 = footer.TOP + 0.02, A3_H - PAGE_INSET
+    moved = 0
+    for s in page.shapes[first_content:]:
+        name = s["key"] or s["text"] or s["kind"]
+        if s["pts"]:                                         # lines and polygons: pull each point inside
+            new = [(min(max(px, x0), x1), min(max(py, y0), y1)) for px, py in s["pts"]]
+            if any(abs(a - b) > 1e-6 or abs(c - d) > 1e-6 for (a, c), (b, d) in zip(new, s["pts"])):
+                xs, ys = [p[0] for p in new], [p[1] for p in new]
+                s["pts"], s["x"], s["y"], s["w"], s["h"] = new, min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)
+                moved += 1
+                warnings.append("%s: was outside the page; moved inside" % name)
+            continue
+        w, h = min(s["w"], x1 - x0), min(s["h"], y1 - y0)
+        nx, ny = min(max(s["x"], x0), x1 - w), min(max(s["y"], y0), y1 - h)
+        if (abs(nx - s["x"]) > 1e-6 or abs(ny - s["y"]) > 1e-6 or abs(w - s["w"]) > 1e-6 or abs(h - s["h"]) > 1e-6):
+            s["x"], s["y"], s["w"], s["h"] = nx, ny, w, h
+            moved += 1
+            warnings.append("%s: was outside the page; moved inside" % name)
+    return moved
 
 
 def build(spec, base, out, comps=None, cables=None, spec_dir="."):
@@ -508,6 +575,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
         footer.build_footer(page, spec.get("project", {}), cables.legend(used), notes, allow_tbc=True)
     except footer.FooterError as e:
         raise BuildError("footer: %s" % e)
+    n_footer = len(page.shapes)
 
     for p in panels:                                                      # layer panels at the very back
         draw_layer(page, p)
@@ -517,20 +585,38 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
             warnings.append(w)
     placed = draw_rings(page, rings, by_id, cables, shapes, warnings)      # ring ellipses sit behind the lines and shapes
     n_lines = 0
-    for c in lines:
-        pts = route(rect_of(by_id[c["a"]]), rect_of(by_id[c["b"]]), c["via"])
+    obstacles = [rect_of(s) for s in shapes if s["kind"] not in SEE_THROUGH]
+    x0 = MARGIN + (BAND_W + 0.05 if panels else 0.0)
+    reqs = [dict(a=rect_of(by_id[c["a"]]), b=rect_of(by_id[c["b"]]), a_id=c["a"], b_id=c["b"], via=c["via"], straight=c["straight"],
+                 from_side=c.get("from_side"), to_side=c.get("to_side")) for c in lines]
+    try:
+        routed = router.route_all(reqs, obstacles, (x0, BOTTOM, MARGIN + AREA_W, TOP))
+    except Exception as e:                                                  # never lose the drawing over the router
+        warnings.append("automatic cable routing failed (%s); plain routes used" % e)
+        routed = [None] * len(lines)
+    paths = []
+    for c, q, pts in zip(lines, reqs, routed):
+        if pts is None:
+            pts = route(q["a"], q["b"], c["via"])
+            if not c["via"]:
+                warnings.append("%s (%s to %s): no clear square route found; a plain one was drawn" % (c["where"], c["a"], c["b"]))
+        paths.append(pts)
+    for c, pts in zip(lines, router.add_hops(paths)):
         color, pattern = cables.line_style(c["cable"])
         page.line(pts, color, pattern, lw=CABLE_LW, key="%s->%s" % (c["a"], c["b"]))
         n_lines += 1
-        for s in shapes:
-            if s["kind"] not in SEE_THROUGH and s["id"] not in (c["a"], c["b"]) and crosses(pts, rect_of(s)):
-                warnings.append("%s (%s to %s) passes through shape %r; add a \"via\" point to route round it" % (c["where"], c["a"], c["b"], s["id"]))
+    for c, pts in zip(lines, paths):
+        if c["via"]:                                                        # a hand-routed cable may run through a device: say so
+            for s in shapes:
+                if s["kind"] not in SEE_THROUGH and s["id"] not in (c["a"], c["b"]) and crosses(pts, rect_of(s)):
+                    warnings.append("%s (%s to %s) passes through shape %r; add a \"via\" point to route round it" % (c["where"], c["a"], c["b"], s["id"]))
     n_lines += draw_ring_links(page, placed, by_id, cables, shapes, warnings)
     for s in (s for s in shapes if s["kind"] not in BEHIND):
         w = draw_shape(page, s)
         if w:
             warnings.append(w)
     warnings += ["shapes %r and %r overlap" % p for p in overlapping(shapes)]
+    keep_on_page(page, n_footer, warnings)
     write_vsdx(page, out, base, title=str(spec.get("project", {}).get("project", "Architecture")))
     return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notes": notes, "page": page}
 
