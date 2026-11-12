@@ -13,6 +13,8 @@ from xml.sax.saxutils import escape
 
 A3_W, A3_H = 16.5354, 11.6929      # inches, A3 landscape (420 x 297 mm)
 FONT_FLOOR = 6.0                    # pt, legibility floor (configurable by callers that check against it)
+SHORT_DASH_PATTERN = 23             # Visio native tiny dashes; internal 2 means dashed
+DASH_PT, GAP_PT = 2.5, 1.25         # compact preview treatment, in points
 
 
 class Page:
@@ -47,7 +49,7 @@ class Page:
     def image(self, x, y, w, h, path, parent=None, **kw):
         """Place a PNG picture (stored once in the package, referenced by relationship)."""
         png_size(path)                              # fail now if it is not a PNG
-        return self.add("image", "icon", x, y, w, h, parent, image=path, **kw)
+        return self.add("image", "icon", x, y, w, h, parent, image=path, fill=None, line=None, **kw)
 
     def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None, arrow=False):
         """Polyline; arrow=True puts a filled arrowhead on the last point."""
@@ -76,10 +78,15 @@ def _image_shape_xml(s, rid):
          "<Cell N='LocPinX' V='%s' F='Width*0.5'/>" % _f(w / 2), "<Cell N='LocPinY' V='%s' F='Height*0.5'/>" % _f(h / 2),
          "<Cell N='ImgOffsetX' V='0' F='ImgWidth*0'/>", "<Cell N='ImgOffsetY' V='0' F='ImgHeight*0'/>",
          "<Cell N='ImgWidth' V='%s' F='Width*1'/>" % _f(w), "<Cell N='ImgHeight' V='%s' F='Height*1'/>" % _f(h)]
+    # Foreign bitmap frames must never inherit style 0's fill or outline. Those
+    # rectangles can otherwise show as black boxes through transparent PNGs.
+    c += ["<Cell N='FillPattern' V='0'/>", "<Cell N='LinePattern' V='0'/>",
+          "<Cell N='FillForegnd' V='#FFFFFF'/>", "<Cell N='FillBkgnd' V='#FFFFFF'/>",
+          "<Cell N='ShdwPattern' V='0'/>"]
     sec = ""
     if s["key"]:
         sec = "<Section N='User'><Row N='SourceKey'><Cell N='Value' V='%s' U='STR'/></Row></Section>" % escape(str(s["key"]), {"'": "&apos;"})
-    g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='0'/><Cell N='NoLine' V='0'/><Cell N='NoShow' V='0'/><Cell N='NoSnap' V='0'/>"
+    g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='1'/><Cell N='NoLine' V='1'/><Cell N='NoShow' V='0'/><Cell N='NoSnap' V='0'/>"
          "<Row T='MoveTo' IX='1'><Cell N='X' V='0'/><Cell N='Y' V='0'/></Row>"
          "<Row T='LineTo' IX='2'><Cell N='X' V='%s' F='Width*1'/><Cell N='Y' V='0'/></Row>"
          "<Row T='LineTo' IX='3'><Cell N='X' V='%s' F='Width*1'/><Cell N='Y' V='%s' F='Height*1'/></Row>"
@@ -99,7 +106,8 @@ def shape_xml(s, rid=None):
          "<Cell N='LocPinX' V='%s' F='Width*0.5'/>" % _f(w / 2), "<Cell N='LocPinY' V='%s' F='Height*0.5'/>" % _f(h / 2)]
     line = s["line"]
     filled = s["fill"] is not None and s["kind"] != "line"
-    c += ["<Cell N='LinePattern' V='%d'/>" % (0 if line is None else s["pattern"]),
+    pattern = SHORT_DASH_PATTERN if s["pattern"] == 2 else s["pattern"]
+    c += ["<Cell N='LinePattern' V='%d'/>" % (0 if line is None else pattern),
           "<Cell N='LineColor' V='%s'/>" % (line or "#000000"), "<Cell N='LineWeight' V='%s'/>" % _f(s["lw"] / 72),
           "<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
     if s.get("arrow"):

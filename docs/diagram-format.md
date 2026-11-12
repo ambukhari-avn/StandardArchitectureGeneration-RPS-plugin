@@ -91,6 +91,7 @@ Manual instructions always win, per cable: `"from_side"` / `"to_side"` (`left`, 
 
 
 ## Look and feel (reference style)
+- Version 1.0.3: internal dashed pattern `2` exports as Visio tiny-dash pattern `23` (see `reference-dashes.png`); PNG previews approximate it with 2.5 pt strokes / 1.25 pt gaps. A blue vertical border separates each layer heading from its components. Footer fields, scope and legend labels are bold; its grid is blue, 1.5 pt inside and 2 pt outside. All picture wrappers explicitly disable fills, outlines and shadows while retaining source PNG transparency.
 - Match `docs/reference-style.png` for visual treatment, using the current project's equipment and topology. Cables and ring links are 1.75 pt, panel/layer boundaries 1.5 pt, outer border 2.25 pt. Preview rendering uses 200 dpi, bold fonts, proportional strokes, dashed containers and Lanczos picture resampling.
 - Picture cleanup keeps up to 2400 pixels, preserves existing alpha and device interior whites, and never upscales small pictures. Choose sharp manufacturer originals at 300 source pixels per displayed inch. Background removal is for uniform light product backdrops, not arbitrary scenes. Use `--preview` and inspect the image before delivery.
 - A blue frame surrounds the sheet; a bold blue **title** (`"title"` in the file, default the Document Name) sits in a strip above the layers.

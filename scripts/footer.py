@@ -30,6 +30,7 @@ SCOPE = {"avanceon": ("Avanceon Scope", "#E6E6E6"),     # grey
 REQUIRED = ("end_user", "client", "project", "prepared_by", "checked_by", "approved_by")
 DEFAULTS = {"doc_name": "Architecture", "revision": "R0", "sheet": "1"}   # Maaden / KSU convention; override per project
 LEGEND_ROWS, LEGEND_ROW_H, LEGEND_MAX_COLS = 4, 0.20, 2
+BLUE, BORDER_LW = "#1F4E9E", 1.5
 
 
 class FooterError(ValueError):
@@ -94,7 +95,7 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
     f = _check_fields(fields, allow_tbc)
     _check_legend(legend)
     sizes = {}
-    foot = page.rect("block", X0, Y0, X1 - X0, HEIGHT, parent, fill=None, lw=1.0)
+    foot = page.rect("block", X0, Y0, X1 - X0, HEIGHT, parent, fill=None, line=BLUE, lw=2.0)
 
     # ---- title block ------------------------------------------------------------------------------------------
     xl = X0 + LEFT_W
@@ -115,7 +116,7 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
         if key == "logo" and logo_path:                     # the logo is a picture, not text
             if not os.path.exists(logo_path):
                 raise FooterError("logo file not found: %s" % logo_path)
-            page.rect("block", x, y, w, h, foot, fill=None, lw=0.5)
+            page.rect("block", x, y, w, h, foot, fill=None, line=BLUE, lw=BORDER_LW)
             iw, ih = png_size(logo_path)
             pad = 0.03
             ph = h - 2 * pad
@@ -125,13 +126,13 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
             page.image(x + (w - pw) / 2, y + (h - ph) / 2, pw, ph, logo_path, foot, key="logo")
             continue
         ladder = [s for s in (12, 10, 8, 7, 6.5, 6) if s <= pref]
-        size = _fit(text, w, h, ladder, bold=(key == "logo"), what="footer field '%s'" % key)
+        size = _fit(text, w, h, ladder, bold=True, what="footer field '%s'" % key)
         sizes[key] = size
-        page.rect("block", x, y, w, h, foot, fill=None, lw=0.5, text=text, size=size, bold=(key == "logo"), halign=ha, valign=1)
+        page.rect("block", x, y, w, h, foot, fill=None, line=BLUE, lw=BORDER_LW, text=text, size=size, bold=True, halign=ha, valign=1)
 
     # ---- notes ------------------------------------------------------------------------------------------------
-    nb = page.rect("block", xl, Y0, NOTES_W, HEIGHT, foot, fill=None, lw=0.5)
-    page.text(xl + 0.03, TOP - 0.20, NOTES_W - 0.06, 0.17, "Notes:", nb, size=7, bold=True, halign=0, valign=0)
+    nb = page.rect("block", xl, Y0, NOTES_W, HEIGHT, foot, fill=None, line=BLUE, lw=BORDER_LW)
+    page.text(xl + 0.03, TOP - 0.20, NOTES_W - 0.06, 0.17, "Notes:", nb, size=7, bold=True, color=BLUE, halign=0, valign=0)
     body = "\n".join("%d. %s" % (i, _clean(n)) for i, n in enumerate(notes, 1))
     if body:
         size = _fit(body, NOTES_W - 0.06, HEIGHT - 0.26, (7, 6.5, 6), what="notes")
@@ -140,19 +141,19 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
 
     # ---- scope boxes (fixed colours) --------------------------------------------------------------------------
     xs = xl + NOTES_W
-    sb = page.rect("block", xs, Y0, SCOPE_W, HEIGHT, foot, fill=None, lw=0.5)
+    sb = page.rect("block", xs, Y0, SCOPE_W, HEIGHT, foot, fill=None, line=BLUE, lw=BORDER_LW)
     bw, bh, gap = SCOPE_W - 0.20, 0.40, 0.10
     for i, (skey, (slabel, scolor)) in enumerate(SCOPE.items()):
         by = TOP - 0.10 - bh - i * (bh + gap)
-        ssize = _fit(slabel, bw, bh - 0.04, (8, 7, 6.5, 6), what="scope label")
+        ssize = _fit(slabel, bw, bh - 0.04, (8, 7, 6.5, 6), bold=True, what="scope label")
         sizes["scope:" + skey] = ssize
-        page.rect("icon", xs + 0.10, by, bw, bh, sb, fill=scolor, line="#404040", lw=0.5, text=slabel, size=ssize,
+        page.rect("icon", xs + 0.10, by, bw, bh, sb, fill=scolor, line=BLUE, lw=BORDER_LW, text=slabel, size=ssize, bold=True,
                   halign=1, valign=1, key="scope:" + skey)
 
     # ---- legend -----------------------------------------------------------------------------------------------
     xg = xs + SCOPE_W
-    lg = page.rect("block", xg, Y0, X1 - xg, HEIGHT, foot, fill=None, lw=0.5)
-    page.text(xg, TOP - 0.22, X1 - xg, 0.20, "Legend", lg, size=8, bold=True)
+    lg = page.rect("block", xg, Y0, X1 - xg, HEIGHT, foot, fill=None, line=BLUE, lw=BORDER_LW)
+    page.text(xg, TOP - 0.22, X1 - xg, 0.20, "Legend", lg, size=8, bold=True, color=BLUE)
     cols = 1 if len(legend) <= LEGEND_ROWS else 2
     colw = (X1 - xg - 0.10) / cols
     for i, e in enumerate(legend):
@@ -160,13 +161,13 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
         x = xg + 0.10 + c * colw
         y = TOP - 0.30 - LEGEND_ROW_H * (r + 1)
         label = _clean(e["label"])
-        size = _fit(label, colw - 0.65, LEGEND_ROW_H - 0.02, (7, 6.5, 6), what="legend entry")
+        size = _fit(label, colw - 0.65, LEGEND_ROW_H - 0.02, (7, 6.5, 6), bold=True, what="legend entry")
         if e.get("kind", "line") == "line":
             page.line([(x, y + LEGEND_ROW_H / 2), (x + 0.45, y + LEGEND_ROW_H / 2)], e["color"], e.get("pattern", 1), 1.75, lg,
                       key="legend:" + label)
         else:
-            page.rect("icon", x, y + 0.03, 0.45, LEGEND_ROW_H - 0.06, lg, fill=e["color"], line="#404040", lw=0.5, key="legend:" + label)
-        page.text(x + 0.55, y, colw - 0.60, LEGEND_ROW_H, label, lg, size=size, halign=0)
+            page.rect("icon", x, y + 0.03, 0.45, LEGEND_ROW_H - 0.06, lg, fill=e["color"], line=BLUE, lw=BORDER_LW, key="legend:" + label)
+        page.text(x + 0.55, y, colw - 0.60, LEGEND_ROW_H, label, lg, size=size, halign=0, bold=True)
     return {"top": TOP, "block": foot, "sizes": sizes}
 
 

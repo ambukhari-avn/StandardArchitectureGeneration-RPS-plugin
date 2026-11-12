@@ -1,6 +1,6 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "architecture-diagram",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Editable A3 Visio architecture diagrams with bold reference styling, clean device cutouts, a fixed footer and standard cable colours."
 }

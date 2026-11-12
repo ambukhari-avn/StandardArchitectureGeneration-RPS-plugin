@@ -272,6 +272,7 @@ def draw_layer(page, p):
     description under it in small black."""
     x, y, w, h = MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]
     page.rect("zone", x, y, w, h, fill=PANEL_FILL, line=PANEL_LINE, lw=1.5, key="layer:" + p["id"])
+    page.line([(x + BAND_W, y), (x + BAND_W, y + h)], BLUE, lw=1.5, key="layer-divider:" + p["id"])
     head = "%s\n%s" % (p["level"].upper(), p["name"].upper())
     size = fit_size(max(head.split("\n"), key=len), BAND_W - 0.3, 0.3, (16, 14, 13, 12, 11, 10, 9), True)
     cy = y + h / 2
@@ -497,7 +498,7 @@ def draw_shape(page, s):
     x, y, w, h = rect_of(s)
     warn = None
     if s["kind"] == "zone":
-        page.rect("zone", x, y, w, h, fill=s["fill"] or ZONE_FILL, line=ZONE_LINE, lw=1.0, pattern=2 if s["dashed"] else 1, key=s["key"])
+        page.rect("zone", x, y, w, h, fill=s["fill"] or ZONE_FILL, line=BLUE, lw=1.5, pattern=2 if s["dashed"] else 1, key=s["key"])
         if s["label"]:
             size, warn = label_size(s, w - 0.1, 0.25, (9, 8, 7, 6.5, 6), True)
             page.text(x + 0.05, y + h - 0.28, w - 0.1, 0.25, s["label"], size=size, bold=True, halign=0, valign=0)

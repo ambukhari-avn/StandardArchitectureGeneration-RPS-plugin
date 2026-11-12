@@ -2,6 +2,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import math
 import os
+from vsdx_writer import DASH_PT, GAP_PT
 
 DPI = 200
 
@@ -45,13 +46,18 @@ def _dashed_outline(draw, box, shape, color, stroke, rounding=0):
         pts.append(pts[0])
     else:
         pts = [(left, top), (right, top), (right, bottom), (left, bottom), (left, top)]
-    dash, distance = .08 * DPI, 0.0
+    _dashed_path(draw, pts, color, stroke)
+
+
+def _dashed_path(draw, pts, color, stroke):
+    dash, gap, distance = DASH_PT * DPI / 72, GAP_PT * DPI / 72, 0.0
+    period = dash + gap
     for p, q in zip(pts, pts[1:]):
         length = math.dist(p, q)
         at = 0.0
         while at < length - 1e-8:
-            phase = (distance + at) % (2 * dash)
-            step = min(length - at, (dash if phase < dash else 2 * dash) - phase)
+            phase = (distance + at) % period
+            step = min(length - at, (dash if phase < dash else period) - phase)
             if step < 1e-8:
                 step = min(length - at, 1e-6)
             if phase < dash:
@@ -73,14 +79,11 @@ def render(page, path):
             im.paste(pic, (int(X(s["x"])), int(Y(s["y"] + s["h"]))), pic)
         elif s["kind"] == "line":
             pts = [(X(x), Y(y)) for x, y in s["pts"]]
-            for p, q in zip(pts, pts[1:]):
-                if s["pattern"] == 2:                                   # dashed
-                    n = max(1, int(((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5 / (0.08 * DPI)))
-                    for i in range(0, n, 2):
-                        d.line([(p[0] + (q[0] - p[0]) * i / n, p[1] + (q[1] - p[1]) * i / n),
-                                (p[0] + (q[0] - p[0]) * min(i + 1, n) / n, p[1] + (q[1] - p[1]) * min(i + 1, n) / n)], fill=s["line"], width=max(1, round(s["lw"] * DPI / 72)))
-                else:
-                    d.line([p, q], fill=s["line"], width=max(1, round(s["lw"] * DPI / 72)))
+            stroke = max(1, round(s["lw"] * DPI / 72))
+            if s["pattern"] == 2:
+                _dashed_path(d, pts, s["line"], stroke)
+            else:
+                d.line(pts, fill=s["line"], width=stroke)
             if s.get("arrow") and len(pts) > 1:                                 # filled arrowhead on the last point
                 (px_, py_), (qx, qy) = pts[-2], pts[-1]
                 L = max(1e-6, ((qx - px_) ** 2 + (qy - py_) ** 2) ** 0.5)
