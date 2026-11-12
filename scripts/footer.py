@@ -24,8 +24,8 @@ TOP = Y0 + HEIGHT                       # diagram content must stay above this l
 LEFT_W, NOTES_W, SCOPE_W = 6.20, 3.90, 1.60   # title block / notes / scope-box widths; the cable legend takes the rest
 
 # Fixed scope colours (the same on every diagram). Shapes use them through their "scope" field in build_diagram.py.
-SCOPE = {"avanceon": ("Avanceon Scope", "#CFE8F7"),     # light blue
-         "other": ("Other Scope", "#F8D7DE")}           # light pink
+SCOPE = {"avanceon": ("Avanceon Scope", "#E6E6E6"),     # grey
+         "other": ("Client Scope", "#F6D9D9")}          # light pink
 
 REQUIRED = ("end_user", "client", "project", "prepared_by", "checked_by", "approved_by")
 DEFAULTS = {"doc_name": "Architecture", "revision": "R0", "sheet": "1"}   # Maaden / KSU convention; override per project

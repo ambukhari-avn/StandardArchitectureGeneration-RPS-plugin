@@ -24,7 +24,7 @@ class Page:
     def add(self, kind, role, x, y, w, h, parent=None, **kw):
         s = dict(id=len(self.shapes) + 1, kind=kind, role=role, x=x, y=y, w=w, h=h, parent=parent, fill=None,
                  line="#000000", lw=0.75, pattern=1, text="", size=6.5, bold=False, halign=1, valign=1, key=None,
-                 pts=None, rounding=0, text_angle=0, color="#000000")
+                 pts=None, rounding=0, text_angle=0, color="#000000", arrow=False)
         s.update(kw)
         self.shapes.append(s)
         return s["id"]
@@ -49,10 +49,11 @@ class Page:
         png_size(path)                              # fail now if it is not a PNG
         return self.add("image", "icon", x, y, w, h, parent, image=path, **kw)
 
-    def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None):
+    def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None, arrow=False):
+        """Polyline; arrow=True puts a filled arrowhead on the last point."""
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
         return self.add("line", "line", min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent,
-                        pts=pts, line=color, lw=lw, pattern=pattern, key=key)
+                        pts=pts, line=color, lw=lw, pattern=pattern, key=key, arrow=arrow)
 
 
 def _f(v):
@@ -101,6 +102,8 @@ def shape_xml(s, rid=None):
     c += ["<Cell N='LinePattern' V='%d'/>" % (0 if line is None else s["pattern"]),
           "<Cell N='LineColor' V='%s'/>" % (line or "#000000"), "<Cell N='LineWeight' V='%s'/>" % _f(s["lw"] / 72),
           "<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
+    if s.get("arrow"):
+        c += ["<Cell N='EndArrow' V='4'/>", "<Cell N='EndArrowSize' V='2'/>"]
     c += ["<Cell N='%s' V='0.02'/>" % n for n in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin")]
     c.append("<Cell N='VerticalAlign' V='%d'/>" % s["valign"])
     if s["rounding"]:

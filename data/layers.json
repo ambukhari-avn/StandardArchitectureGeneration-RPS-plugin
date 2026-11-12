@@ -1,35 +1,47 @@
 {
- "_note": "Standard layers, top to bottom (Purdue). Style is fixed in scripts/build_diagram.py so every drawing looks the same. The model asks for layers by id; the program stacks them in this order.",
+ "_note": "Standard layers, top to bottom (Purdue). Each is drawn as a label column (LEVEL n, name, description) beside a white row. Style is fixed in scripts/build_diagram.py.",
  "layers": [
   {
    "id": "enterprise",
    "label": "Enterprise Layer",
-   "level": "Level 4-5"
+   "level": "Level 4-5",
+   "name": "Enterprise",
+   "desc": "Business Planning & Logistics"
   },
   {
    "id": "dmz",
    "label": "DMZ Layer",
-   "level": "Level 3.5"
+   "level": "Level 3.5",
+   "name": "DMZ",
+   "desc": "Security Zone Between IT & OT"
   },
   {
    "id": "operations",
    "label": "Operations Layer",
-   "level": "Level 3"
+   "level": "Level 3",
+   "name": "Operations",
+   "desc": "Site Operations & Management"
   },
   {
    "id": "scada",
    "label": "SCADA Layer",
-   "level": "Level 2"
+   "level": "Level 2",
+   "name": "SCADA",
+   "desc": "Supervisory Monitoring & Operations"
   },
   {
    "id": "control",
    "label": "Control Layer",
-   "level": "Level 1"
+   "level": "Level 1",
+   "name": "PLC",
+   "desc": "Control & Data Acquisition"
   },
   {
    "id": "field",
    "label": "Field Layer",
-   "level": "Level 0"
+   "level": "Level 0",
+   "name": "Field Instruments",
+   "desc": "Sensing & Final Control Elements"
   }
  ]
 }

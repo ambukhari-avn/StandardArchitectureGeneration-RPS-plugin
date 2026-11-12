@@ -228,42 +228,38 @@ class LayerTests(unittest.TestCase):
             self.assertGreater(centres[0], p["x"] + B.BAND_W)
             self.assertLess(centres[-1], p["x"] + p["w"])
 
-    def test_one_scope_block_per_scope_per_layer_no_text_and_no_tile_behind_devices(self):
-        spec = layer_spec(["scada"], {"scada": 2})
-        spec["shapes"] += [{"id": "o1", "label": "O1", "layer": "scada", "scope": "other", "component": "industrial_switch"}]
+    def test_layers_are_white_rows_with_a_blue_label_column_and_no_scope_blocks(self):
+        spec = layer_spec(["scada", "control"], {"scada": 2, "control": 1})
+        spec["shapes"][0]["scope"] = "other"
         r = build(spec)
-        bl = sorted(self.blocks(r), key=lambda s: s["x"])
-        self.assertEqual([b["key"].split(":")[-1] for b in bl], ["avanceon", "other"])          # Avanceon left, other right
-        self.assertEqual([b["fill"].upper() for b in bl], ["#CFE8F7", "#F8D7DE"])
-        self.assertLess(bl[0]["x"] + bl[0]["w"], bl[1]["x"])
-        self.assertTrue(all(not b["text"] for b in bl))                                          # no scope wording inside the blocks
+        self.assertFalse(any((s["key"] or "").startswith(("scope-block:", "layer-band:")) for s in r["page"].shapes))
         self.assertFalse(any((s["key"] or "").endswith(":scope") for s in r["page"].shapes))
-        self.assertFalse(any("scope" in (s["text"] or "").lower() and "Scope" not in (s["text"] or "") for s in r["page"].shapes))
+        row = [s for s in r["page"].shapes if (s["key"] or "") == "layer:scada"][0]
+        self.assertEqual((row["fill"].upper(), row["line"], row["rounding"]), ("#FFFFFF", B.BLUE, 0))
+        name = [s for s in r["page"].shapes if (s["key"] or "") == "layer-name:scada"][0]
+        desc = [s for s in r["page"].shapes if (s["key"] or "") == "layer-desc:scada"][0]
+        self.assertEqual((name["text"], name["color"], name["bold"]), ("LEVEL 2\nSCADA", B.BLUE, True))
+        self.assertEqual((desc["text"], desc["color"]), ("Supervisory Monitoring & Operations", "#000000"))
+        self.assertLess(name["x"] + name["w"], row["x"] + B.BAND_W + 0.01)                        # labels stay in the left column
         pics = [s for s in r["page"].shapes if s["kind"] == "image" and (s["key"] or "").startswith("component:")]
-        self.assertEqual([sum(1 for s in pics if b["x"] <= s["x"] <= b["x"] + b["w"]) for b in bl], [2, 1])
+        self.assertTrue(all(p["x"] > row["x"] + B.BAND_W for p in pics))                          # devices start right of the column
 
-    def test_a_layer_with_one_scope_has_one_full_width_block_and_none_without_scope(self):
-        r = build(layer_spec(["scada"], {"scada": 2}))
-        (b,) = self.blocks(r)
-        self.assertGreater(b["w"], B.AREA_W - 2 * B.BAND_W - 0.5)
-        spec = layer_spec(["scada"], {"scada": 2})
-        for s in spec["shapes"]:
-            del s["scope"]
-        self.assertEqual(self.blocks(build(spec)), [])
+    def test_layers_touch_each_other_and_fill_the_area(self):
+        r = build(layer_spec(["scada", "control", "field"], {"scada": 1, "control": 1, "field": 1}))
+        ps = self.panels(r)
+        for a, b in zip(ps, ps[1:]):
+            self.assertAlmostEqual(a["y"], b["y"] + b["h"], 3)
 
-    def test_band_is_dark_blue_with_white_rotated_name(self):
-        r = build(layer_spec(["scada"], {"scada": 1}))
-        band = [s for s in r["page"].shapes if (s["key"] or "").startswith("layer-band:")][0]
-        name = [s for s in r["page"].shapes if (s["key"] or "").startswith("layer-name:")][0]
-        self.assertEqual((band["fill"], name["text"], name["text_angle"], name["color"]), (B.BAND_FILL, "SCADA Layer", 90, "#FFFFFF"))
-        self.assertEqual(self.blocks(r)[0]["line"], B.SCOPE_LINE)
-
-    def test_vsdx_has_rounded_panels_and_rotated_names(self):
-        r = build(layer_spec(["scada", "field"], {"scada": 1, "field": 1}))
-        import zipfile
-        x = zipfile.ZipFile(r["out"]).read("visio/pages/page1.xml").decode()
-        self.assertIn("N='Rounding'", x)
-        self.assertIn("N='TxtAngle'", x)
+    def test_title_and_frame(self):
+        r = build(layer_spec(["scada"], {"scada": 1}, title="plc & scada system architecture"))
+        title = [s for s in r["page"].shapes if s["key"] == "title"][0]
+        frame = [s for s in r["page"].shapes if s["key"] == "frame"][0]
+        self.assertEqual((title["text"], title["color"], title["bold"]), ("PLC & SCADA SYSTEM ARCHITECTURE", B.BLUE, True))
+        self.assertEqual((frame["line"], frame["fill"]), (B.BLUE, None))
+        self.assertGreater(title["y"], B.TOP)                                                      # above the layers
+        self.assertLess(title["y"] + title["h"], frame["y"] + frame["h"])                           # inside the frame
+        r2 = build(layer_spec(["scada"], {"scada": 1}))
+        self.assertEqual([s for s in r2["page"].shapes if s["key"] == "title"][0]["text"], "ARCHITECTURE")
 
     def test_bad_layer_use_stops_the_build(self):
         with self.assertRaises(B.BuildError):
@@ -325,15 +321,18 @@ class PictureTests(unittest.TestCase):
         r = build(self.spec(self.device(scope="other")))
         self.assertFalse(any((s["key"] or "").endswith(":scope") for s in r["page"].shapes))
 
-    def test_group_is_a_dashed_rounded_container_without_a_title_pill(self):
-        r = build(self.spec({"id": "g", "kind": "group", "label": "Redundant PLC System", "x": 1, "y": 1, "w": 6, "h": 3}, self.device()))
+    def test_group_is_a_dashed_rounded_blue_box_with_a_blue_bold_title_inside(self):
+        r = build(self.spec({"id": "g", "kind": "group", "label": "MAIN PLC PANEL", "x": 1, "y": 1, "w": 6, "h": 3}, self.device()))
         box = [s for s in r["page"].shapes if (s["key"] or "") == "shape:g"][0]
-        self.assertEqual((box["pattern"], box["rounding"] > 0), (2, True))
-        self.assertNotIn("Redundant PLC System", [s["text"] for s in r["page"].shapes])
+        title = [s for s in r["page"].shapes if s["text"] == "MAIN PLC PANEL"][0]
+        self.assertEqual((box["pattern"], box["rounding"] > 0, box["line"]), (2, True, B.BLUE))
+        self.assertEqual((title["color"], title["bold"], title["fill"]), (B.BLUE, True, None))      # plain text, no pill
+        self.assertLess(title["y"] + title["h"], box["y"] + box["h"] + 1e-6)                        # inside the box, at the top
+        self.assertGreater(title["y"], box["y"] + box["h"] / 2)
         with self.assertRaises(B.BuildError):
             build(self.spec({"id": "g", "kind": "group", "label": "no size", "x": 1, "y": 1}))
 
-    def test_pill_labels_are_no_longer_drawn_but_old_files_still_build(self):
+    def test_pill_labels_are_not_drawn_but_old_files_still_build(self):
         r = build(self.spec(self.device(id="a", x=1, y=1), self.device(id="b", x=9, y=1),
                             {"id": "p", "kind": "pill", "label": "Field Instruments & Devices", "x": 3.5, "y": 1.4}) |
                   {"lines": [{"from": "a", "to": "b", "cable": "hardwired"}]})
@@ -607,6 +606,77 @@ class CableRuleTests(unittest.TestCase):
         r = build({"project": self.proj, "layers": ["scada", "field"], "shapes": shapes, "lines": [{"from": "a", "to": "b", "cable": "ethernet"}]})
         for cab in self.cables(r):
             self.assertTrue(all(p[0] >= B.MARGIN + B.BAND_W for p in cab["pts"]))
+
+
+class ChannelRoutingTests(unittest.TestCase):
+    """Devices in rows: cables leave by the top or bottom, run on their own track in the band between the rows, and enter by the top or bottom."""
+    proj = dict(end_user="E", client="C", project="P", prepared_by="X", checked_by="Y", approved_by="Z")
+
+    def rows(self):
+        def d(i, layer, comp="industrial_switch"):
+            return {"id": i, "label": i, "layer": layer, "scope": "avanceon", "component": comp}
+        shapes = [d("s1", "scada"), d("s2", "scada"), d("s3", "scada"), d("p1", "control"), d("p2", "control"), d("p3", "control")]
+        lines = [{"from": "s1", "to": "p3", "cable": "ethernet"}, {"from": "s2", "to": "p3", "cable": "ethernet"},
+                 {"from": "s3", "to": "p1", "cable": "ethernet"}, {"from": "s1", "to": "p1", "cable": "ethernet"}]
+        return build({"project": self.proj, "layers": ["scada", "control"], "shapes": shapes, "lines": lines})
+
+    def cables(self, r):
+        return [s for s in r["page"].shapes if s["kind"] == "line" and "->" in (s["key"] or "")]
+
+    def test_cables_between_rows_are_vertical_horizontal_vertical_with_separate_tracks(self):
+        r = self.rows()
+        self.assertEqual(r["warnings"], [])
+        ys = []
+        for c in self.cables(r):
+            pts = [p for i, p in enumerate(c["pts"]) if i == 0 or abs(p[0] - c["pts"][i - 1][0]) + abs(p[1] - c["pts"][i - 1][1]) > 0.1]
+            runs = [(p, q) for p, q in zip(pts, pts[1:]) if abs(p[1] - q[1]) < 1e-6 and abs(p[0] - q[0]) > 0.2]
+            if runs:                                                                      # (a cable between devices in line is simply straight)
+                ys.append(round(runs[0][0][1], 3))
+        self.assertGreaterEqual(len(ys), 2)
+        self.assertEqual(len(ys), len(set(ys)))                                           # every cable has its own track
+
+    def test_neighbours_in_a_row_get_one_straight_cable_and_others_go_round(self):
+        def d(i, x):
+            return {"id": i, "label": i, "layer": "scada", "scope": "avanceon", "component": "industrial_switch"}
+        shapes = [d("a", 0), d("b", 0), d("c", 0)]
+        r = build({"project": self.proj, "layers": ["scada", "field"], "shapes": shapes + [dict(d("f", 0), layer="field")],
+                   "lines": [{"from": "a", "to": "b", "cable": "ethernet"}, {"from": "a", "to": "c", "cable": "ethernet"}]})
+        ab, ac = self.cables(r)
+        self.assertEqual(len(ab["pts"]), 2)                                              # a and b are neighbours: straight
+        self.assertGreaterEqual(len(ac["pts"]), 4)                                       # c is behind b: over the top
+
+
+
+class HardwiredBusTests(unittest.TestCase):
+    proj = dict(end_user="E", client="C", project="P", prepared_by="X", checked_by="Y", approved_by="Z")
+
+    def spec(self):
+        def d(i, layer, comp):
+            return {"id": i, "label": i, "layer": layer, "scope": "avanceon", "component": comp}
+        shapes = [d("io", "control", "remote_i_o_drop"), d("p1", "field", "remote_i_o_drop"), d("p2", "field", "remote_i_o_drop"), d("p3", "field", "remote_i_o_drop")]
+        lines = [{"from": k, "to": "io", "cable": "hardwired"} for k in ("p1", "p2", "p3")]
+        return {"project": self.proj, "layers": ["control", "field"], "shapes": shapes, "lines": lines}
+
+    def test_instruments_share_one_bus_and_the_arrowhead_is_at_the_io_end(self):
+        r = build(self.spec())
+        cabs = [s for s in r["page"].shapes if s["kind"] == "line" and "->" in (s["key"] or "")]
+        self.assertEqual(len(cabs), 3)
+        self.assertTrue(all(c["arrow"] for c in cabs))
+        io_bottom = min(s["y"] for s in r["page"].shapes if s["kind"] == "image" and (s["key"] or "").startswith("component:") and s["y"] > B.BOTTOM + 4)
+        for c in cabs:
+            self.assertGreaterEqual(c["pts"][-1][1], io_bottom - 0.5)                           # the last point (arrowhead) is up at the I/O device
+            self.assertLess(c["pts"][0][1], c["pts"][-1][1])                                    # starts at the instrument, below it
+        runs = {round(p[1], 3) for c in cabs for p, q in zip(c["pts"], c["pts"][1:]) if abs(p[1] - q[1]) < 1e-6 and abs(p[0] - q[0]) > 0.1}
+        self.assertEqual(len(runs), 1)                                                          # one shared horizontal bus
+
+    def test_arrow_is_written_to_the_vsdx(self):
+        r = build(self.spec())
+        with zipfile.ZipFile(r["out"]) as z:
+            self.assertIn("N='EndArrow'", z.read("visio/pages/page1.xml").decode())
+
+    def test_other_cables_have_no_arrow(self):
+        r = build(spec())
+        self.assertFalse(any(s.get("arrow") for s in r["page"].shapes))
 
 
 if __name__ == "__main__":

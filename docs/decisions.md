@@ -65,3 +65,9 @@ Layer names on the dark-blue band are white. Group title pills and `pill` label 
 
 ## D48 - Standard cabling rules (router.py)
 Cables are routed on a grid built from the device edges (Dijkstra with bend, overlap and crossing penalties): square, end to end, round devices, fewest bends, separate tracks, spread attachment points, hops at crossings. Manual `via`, `from_side`, `to_side` and `straight` override per cable. Ring links keep their existing look. If no clear route exists the old plain route is drawn and a warning is given. Cable text labels are not part of this (the builder does not print cable labels).
+
+## D49 - Channel routing for layered drawings
+The first grid router produced tangled cables on dense layers. Devices are now clustered into rows and cables are routed channel-style: top/bottom exits, one track per cable in the band between rows, tracks ordered to minimise crossings, spread attachment points, straight cable between row neighbours. Anything that does not fit (no band, blocked, manual sides) falls back to the grid router (A*, bend/overlap/crossing penalties, side preference).
+
+## D50 - Reference look and feel (supersedes D45 scope blocks, D47 band, group-title removal)
+Following the approved reference picture: blue frame and bold blue title strip; white layer rows with a left label column (LEVEL n, name, description) instead of the dark-blue band; no scope blocks in the layers (scope only in the footer: Avanceon grey, Client pink); group boxes dashed rounded blue with blue bold title text (no pill); hardwired cables share a bus per I/O device and end in an arrowhead (Visio EndArrow 4).

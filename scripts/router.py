@@ -17,7 +17,9 @@ from bisect import bisect_left, bisect_right
 
 CLEAR = 0.06              # clearance kept round every device
 STUB = 0.15               # first / last piece of a cable, at a right angle to the device edge
-BEND, CROSS, TOUCH, OVERLAP = 0.9, 0.7, 2.0, 8.0     # penalties (inches of extra length they are worth)
+BEND, CROSS, TOUCH, OVERLAP, NEAR, ROW = 1.3, 1.8, 2.5, 5.0, 0.4, 2.2   # penalties (inches of extra length they are worth); NEAR = running right beside another cable, ROW = factor for a horizontal run level with a row of devices (cables belong in the channels between rows)
+SIDEPEN = 3.0            # extra cost for leaving / entering a device by a side that does not face the other device
+TRACK = 0.12              # spacing of the always-available tracks (so parallel cables can be kept apart)
 SPREAD = 0.28             # spacing between cables that attach to the same side of a device
 HOP_R = 0.07              # radius of a hop
 SIDES = {"left": (-1, 0), "right": (1, 0), "top": (0, 1), "bottom": (0, -1)}
@@ -85,9 +87,11 @@ def _uniq(vals, lo, hi, tol=0.012):
 
 
 class Grid:
-    def __init__(self, rects, bounds):
+    def __init__(self, rects, bounds, extra_x=(), extra_y=()):
         x0, y0, x1, y1 = bounds
-        xs, ys = [x0, x1], [y0, y1]
+        xs, ys = [x0, x1] + list(extra_x), [y0, y1] + list(extra_y)
+        xs += [x0 + k * TRACK for k in range(1, int((x1 - x0) / TRACK))]
+        ys += [y0 + k * TRACK for k in range(1, int((y1 - y0) / TRACK))]
         for (x, y, w, h) in rects:
             xs += [x - STUB, x + w + STUB, x, x + w, x + w / 2]
             ys += [y - STUB, y + h + STUB, y, y + h, y + h / 2]
@@ -103,6 +107,7 @@ class Grid:
                         vals += [(a + b) / 2 - 0.12, (a + b) / 2 + 0.12]
         self.xs, self.ys = _uniq(xs, x0, x1), _uniq(ys, y0, y1)
         self.bounds = bounds
+        self.row = [any(y + 0.02 < yy < y + h - 0.02 for (x, y, w, h) in rects) for yy in self.ys]   # this height is level with a device
         nx, ny = len(self.xs), len(self.ys)
         self.hb = [bytearray(ny) for _ in range(max(nx - 1, 0))]      # hb[i][j]: edge (i,j)-(i+1,j) blocked
         self.vb = [bytearray(max(ny - 1, 0)) for _ in range(nx)]      # vb[i][j]: edge (i,j)-(i,j+1) blocked
@@ -135,11 +140,15 @@ class Grid:
 class Occupancy:
     """What earlier cables already use: grid edges (collinear overlap) and nodes (crossings / touching)."""
     def __init__(self):
-        self.edges, self.nodes = set(), {}
+        self.edges, self.nodes, self.near = set(), {}, set()
 
     def add(self, grid, nodes):
         for (i, j), (k, l) in zip(nodes, nodes[1:]):
             self.edges.add((min(i, k), min(j, l), 0 if j == l else 1))
+            if j == l:                                                # the tracks either side of a horizontal run, and of a vertical one
+                self.near.update({(min(i, k), j - 1, 0), (min(i, k), j + 1, 0)})
+            else:
+                self.near.update({(i - 1, min(j, l), 1), (i + 1, min(j, l), 1)})
         for n, (i, j) in enumerate(nodes):
             mid = 0 < n < len(nodes) - 1
             if not mid:
@@ -157,24 +166,29 @@ class Occupancy:
 
 # ---- the search ---------------------------------------------------------------------------------------------------------------
 def _search(grid, occ, starts, targets, bend_cost):
-    """starts: [(node, dir, port, cost)], targets: {node: [(inward_dir_index, port)]}. Returns (cost, nodes, start_port, end_port) or None."""
+    """A* from the start stubs to any target stub. starts: [(node, dir, port, cost)], targets: {node: [(inward_dir_index, port)]}.
+    Returns (cost, nodes, start_port, end_port) or None."""
     xs, ys = grid.xs, grid.ys
+    tl = list(targets)
+
+    def h(i, j):
+        return min(abs(xs[i] - xs[a]) + abs(ys[j] - ys[b]) for a, b in tl)
     heap, best, prev = [], {}, {}
     for node, d, prt, c0 in starts:
         st = (node[0], node[1], d)
         if c0 < best.get(st, 1e18):
             best[st] = c0
             prev[st] = (None, prt)
-            heapq.heappush(heap, (c0, st))
+            heapq.heappush(heap, (c0 + h(node[0], node[1]), c0, st))
     found, limit = None, 1e18
     while heap:
-        cost, st = heapq.heappop(heap)
-        if cost > best.get(st, 1e18) or cost > limit:
+        f, cost, st = heapq.heappop(heap)
+        if cost > best.get(st, 1e18) or f > limit:
             continue
         i, j, d = st
         if (i, j) in targets:
-            for inward, prt in targets[(i, j)]:
-                total = cost + (0 if inward == d else bend_cost)
+            for inward, prt, pen in targets[(i, j)]:
+                total = cost + pen + (0 if inward == d else bend_cost)
                 if total < limit:
                     limit, found = total, (st, prt)
         for nd in range(4):
@@ -185,8 +199,13 @@ def _search(grid, occ, starts, targets, bend_cost):
                 continue
             length = abs(xs[ni] - xs[i]) + abs(ys[nj] - ys[j])
             c = cost + length + (bend_cost if nd != d else 0)
-            if (min(i, ni), min(j, nj), 0 if nd < 2 else 1) in occ.edges:
+            ek = (min(i, ni), min(j, nj), 0 if nd < 2 else 1)
+            if nd < 2 and grid.row[j]:
+                c += (ROW - 1) * length
+            if ek in occ.edges:
                 c += OVERLAP * length
+            elif ek in occ.near:
+                c += NEAR * length
             use = occ.nodes.get((ni, nj))
             if use:
                 if "B" in use or "end" in use:
@@ -197,7 +216,7 @@ def _search(grid, occ, starts, targets, bend_cost):
             if c < best.get(ns, 1e18):
                 best[ns] = c
                 prev[ns] = (st, None)
-                heapq.heappush(heap, (c, ns))
+                heapq.heappush(heap, (c + h(ni, nj), c, ns))
     if not found:
         return None
     st, end_port = found
@@ -229,12 +248,12 @@ def _one(grid, occ, ra, rb, sides_a, sides_b, fixed_a, fixed_b, bend_cost):
         i, j = _stub_node(grid, p, sd)
         if i is not None and j is not None:
             d = DIRS.index(SIDES[sd]) if SIDES[sd] in DIRS else 0
-            starts.append(((i, j), d, (p, sd), STUB))
+            starts.append(((i, j), d, (p, sd), STUB + (0 if sd == facing_side(ra, rb) else SIDEPEN)))
     for p, sd in _endpoints(grid, rb, sides_b, ra, fixed_b):
         i, j = _stub_node(grid, p, sd)
         if i is not None and j is not None:
             inward = DIRS.index((-SIDES[sd][0], -SIDES[sd][1]))
-            targets.setdefault((i, j), []).append((inward, (p, sd)))
+            targets.setdefault((i, j), []).append((inward, (p, sd), 0 if sd == facing_side(rb, ra) else SIDEPEN))
     if not starts or not targets:
         return None
     return _search(grid, occ, starts, targets, bend_cost)
@@ -286,16 +305,236 @@ def manual(ra, rb, via, side_a=None, side_b=None):
 
 
 # ---- all cables ---------------------------------------------------------------------------------------------------------------
+# ---- channel routing (rows of devices, tracks in the free bands between them) ------------------------------------------------------
+def _rows(rects):
+    """Cluster rectangles into horizontal rows, top first: [(lo, hi, [rect, ...])]."""
+    rows = []
+    for r in sorted(set(rects), key=lambda r: -(r[1] + r[3] / 2)):
+        cy = r[1] + r[3] / 2
+        for row in rows:
+            lo, hi, mem = row
+            if lo - 0.3 * (hi - lo) <= cy <= hi + 0.3 * (hi - lo) and abs(cy - sum(m[1] + m[3] / 2 for m in mem) / len(mem)) < 0.45 * max(m[3] for m in mem):
+                row[0], row[1] = min(lo, r[1]), max(hi, r[1] + r[3])
+                mem.append(r)
+                break
+        else:
+            rows.append([r[1], r[1] + r[3], [r]])
+    return rows
+
+
+def _hits(pts, rects, skip, e=0.03):
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        for r in rects:
+            if r in skip:
+                continue
+            x, y, w, h = r
+            if min(x1, x2) < x + w + e and max(x1, x2) > x - e and min(y1, y2) < y + h + e and max(y1, y2) > y - e:
+                return True
+    return False
+
+
+def _crossings(upper, lower):
+    """Crossings if cable `upper` runs on a track above cable `lower` in the same band."""
+    c = sum(1 for x in lower["tops"] if upper["l"] <= x <= upper["r"])      # lower's drop from the row above passes upper's track
+    c += sum(1 for x in upper["bots"] if lower["l"] <= x <= lower["r"])     # upper's rise from the row below passes lower's track
+    return c
+
+
+def _order_tracks(items):
+    """Order the cables of one band from the top track down so that the fewest cables cross (nested spans: the outer one is further out)."""
+    def total(seq):
+        return sum(_crossings(seq[i], seq[j]) for i in range(len(seq)) for j in range(i + 1, len(seq)))
+    best = None
+    for key in (lambda i: i["r"] - i["l"], lambda i: i["l"], lambda i: -(i["r"] - i["l"])):
+        seq = sorted(items, key=key)
+        cost = total(seq)
+        for _ in range(200):
+            improved = False
+            for i in range(len(seq) - 1):
+                if _crossings(seq[i + 1], seq[i]) < _crossings(seq[i], seq[i + 1]):
+                    seq[i], seq[i + 1] = seq[i + 1], seq[i]
+                    improved = True
+            if not improved:
+                break
+        cost = total(seq)
+        if best is None or cost < best[0]:
+            best = (cost, list(seq))
+    return best[1]
+
+
+def channel_routes(requests, rects, bounds):
+    """Tidy routes for cables between devices that sit in rows (layered drawings): leave by the top or bottom, run along a track in the free
+    band between the rows, enter by the top or bottom. Returns a list with a point list per request, None where this style does not apply."""
+    out = [None] * len(requests)
+    rows = _rows(rects)
+    if len(rows) < 1:
+        return out
+    x0, y0, x1, y1 = bounds
+    row_of = {r: n for n, (lo, hi, mem) in enumerate(rows) for r in mem}
+    chan = {}                                                           # channel k: free band above row k (k = len(rows): below the last row)
+    for k in range(len(rows) + 1):
+        top = rows[k - 1][0] if k > 0 else y1                           # (rows[k-1] is the row above channel k, when k > 0) ...
+        hi_edge = rows[k][1] if k < len(rows) else y0
+        chan[k] = (hi_edge, rows[k - 1][0] if k > 0 else y1)            # (bottom, top) of the free band
+    # chan[k] = band between row k-1 (above) and row k (below); chan[0] above all rows; chan[n] below all rows
+    plans, load, buses = {}, {}, {}
+    side_groups = {}
+    straight, uses = {}, {}                                              # neighbours in a row with nothing between them: a straight horizontal cable
+    for n, q in enumerate(requests):
+        if q.get("via") or q.get("from_side") or q.get("to_side") or q["a"] not in row_of or q["b"] not in row_of:
+            continue
+        a, b = q["a"], q["b"]
+        if row_of[a] != row_of[b]:
+            continue
+        left, right = (a, b) if a[0] < b[0] else (b, a)
+        ylo, yhi = max(a[1], b[1]), min(a[1] + a[3], b[1] + b[3])
+        gx0, gx1 = left[0] + left[2], right[0]
+        if yhi - ylo < 0.3 or gx1 - gx0 < 0.2:
+            continue
+        if any(r not in (a, b) and r[0] < gx1 and r[0] + r[2] > gx0 and r[1] < yhi and r[1] + r[3] > ylo for r in rects):
+            continue
+        straight[n] = (left, right, (ylo + yhi) / 2, a is left)
+        for key in ((left, "right"), (right, "left")):
+            uses[key] = uses.get(key, 0) + 1
+    for n, (left, right, ymid, a_left) in list(straight.items()):
+        if uses[(left, "right")] == 1 and uses[(right, "left")] == 1:
+            out[n] = [(left[0] + left[2], ymid), (right[0], ymid)] if a_left else [(right[0], ymid), (left[0] + left[2], ymid)]
+        else:
+            del straight[n]
+    for n, q in enumerate(requests):
+        if n in straight:
+            continue
+        if q.get("via") or q.get("from_side") or q.get("to_side") or q["a"] not in row_of or q["b"] not in row_of:
+            continue
+        a, b = q["a"], q["b"]
+        ra, rb = row_of[a], row_of[b]
+        if ra == rb:                                                    # same row: round the top or the bottom, whichever band is less used
+            k = ra if load.get(ra, 0) <= load.get(ra + 1, 0) else ra + 1
+            side = "top" if k == ra else "bottom"
+            ends = [(a, side, b), (b, side, a)]
+        else:
+            k = min(ra, rb) + 1
+            ends = [(a, "bottom" if ra < rb else "top", b), (b, "top" if ra < rb else "bottom", a)]
+        load[k] = load.get(k, 0) + 1
+        plans[n] = (k, ends)
+        if q.get("bus"):
+            buses.setdefault((k, q["bus"]), []).append(n)
+        for idx, (dev, side, other) in enumerate(ends):
+            side_groups.setdefault((dev, side), []).append((n, idx, other))
+    port_x = {}
+    for (dev, side), members in side_groups.items():
+        members.sort(key=lambda m: m[2][0] + m[2][2] / 2)
+        x, y, w, h = dev
+        m = len(members)
+        gap = min(SPREAD, (w - 0.2) / m) if m > 1 else 0
+        for i, (n, idx, other) in enumerate(members):
+            port_x[(n, idx)] = x + w / 2 + (i - (m - 1) / 2) * gap
+    on_bus = {n for members in buses.values() if len(members) > 1 for n in members}     # cables that share a bus line (hardwired fan-in)
+    for n, (k, ends) in plans.items():                                  # one cable on each end and the devices overlap: make it straight
+        (da, sa, oa), (db, sb, ob) = ends
+        if n not in on_bus and sa != sb and len(side_groups[(da, sa)]) == 1 and len(side_groups[(db, sb)]) == 1:
+            lo_x, hi_x = max(da[0], db[0]), min(da[0] + da[2], db[0] + db[2])
+            if hi_x - lo_x > 0.2:
+                port_x[(n, 0)] = port_x[(n, 1)] = (lo_x + hi_x) / 2
+    # tracks in each channel: one track per cable, ordered so that as few cables as possible cross; shared (left-edge) only if the band is too narrow
+    per_chan, bus_items = {}, {}
+    for n, (k, ends) in plans.items():
+        px0, px1 = port_x[(n, 0)], port_x[(n, 1)]
+        if n not in on_bus and ends[0][1] != ends[1][1] and abs(px0 - px1) < 1e-6:
+            continue                                                    # straight vertical: no track
+        tops = [x for x, (d, s, o) in zip((px0, px1), ends) if s == "bottom"]      # ends that come down from the row above the band
+        bots = [x for x, (d, s, o) in zip((px0, px1), ends) if s == "top"]         # ends that come up from the row below it
+        if n in on_bus:                                                 # one shared track (the bus) for all cables of this hub
+            key = (k, requests[n]["bus"])
+            mine = bus_items.get(key)
+            if mine is None:
+                mine = bus_items[key] = dict(n=n, l=min(px0, px1), r=max(px0, px1), tops=[], bots=[], members=[])
+                per_chan.setdefault(k, []).append(mine)
+            mine["l"], mine["r"] = min(mine["l"], px0, px1), max(mine["r"], px0, px1)
+            mine["tops"] += tops
+            mine["bots"] += bots
+            mine["members"].append(n)
+            continue
+        per_chan.setdefault(k, []).append(dict(n=n, l=min(px0, px1), r=max(px0, px1), tops=tops, bots=bots))
+    ytrack = {}
+    for k, items in per_chan.items():
+        lo_y, hi_y = chan[k]
+        avail = hi_y - lo_y - 0.2
+        if avail < 0:
+            continue
+        order = _order_tracks(items)                                    # top track first
+        if len(order) > 1 and avail / (len(order) - 1) >= 0.09:
+            step = min(0.2, avail / (len(order) - 1))
+            top_y = (lo_y + hi_y) / 2 + step * (len(order) - 1) / 2
+            for ti, it in enumerate(order):
+                ytrack[it["n"]] = top_y - ti * step
+        elif len(order) == 1:
+            ytrack[order[0]["n"]] = (lo_y + hi_y) / 2
+        else:                                                           # too many for the band: share tracks where the spans do not overlap
+            tracks, assign = [], {}
+            for it in sorted(items, key=lambda i: i["l"]):
+                for ti, end in enumerate(tracks):
+                    if end + 0.12 < it["l"]:
+                        tracks[ti] = it["r"]
+                        assign[it["n"]] = ti
+                        break
+                else:
+                    tracks.append(it["r"])
+                    assign[it["n"]] = len(tracks) - 1
+            cnt = len(tracks)
+            if avail < 0.08 * max(cnt - 1, 0):
+                continue
+            step = min(0.2, avail / max(cnt - 1, 1)) if cnt > 1 else 0
+            top_y = (lo_y + hi_y) / 2 + step * (cnt - 1) / 2
+            for n_, ti in assign.items():
+                ytrack[n_] = top_y - ti * step
+    for items in per_chan.values():                                     # every cable on a bus gets the bus's track
+        for it in items:
+            if it["n"] in ytrack:
+                for m in it.get("members", ()):
+                    ytrack[m] = ytrack[it["n"]]
+    for n, (k, ends) in plans.items():
+        px0, px1 = port_x[(n, 0)], port_x[(n, 1)]
+        (da, sa, oa), (db, sb, ob) = ends
+        ya = da[1] + da[3] if sa == "top" else da[1]
+        yb = db[1] + db[3] if sb == "top" else db[1]
+        if n in ytrack:
+            pts = [(px0, ya), (px0, ytrack[n]), (px1, ytrack[n]), (px1, yb)]
+        elif abs(px0 - px1) < 1e-6:
+            pts = [(px0, ya), (px1, yb)]
+        else:
+            continue
+        if not (x0 - 1e-6 <= min(p[0] for p in pts) and max(p[0] for p in pts) <= x1 + 1e-6 and y0 - 1e-6 <= min(p[1] for p in pts) and max(p[1] for p in pts) <= y1 + 1e-6):
+            continue
+        if _hits(pts, rects, (da, db)):
+            continue
+        out[n] = pts
+    return out
+
+
+def _manhattan(q):
+    (ax, ay, aw, ah), (bx, by, bw, bh) = q["a"], q["b"]
+    return abs(ax + aw / 2 - bx - bw / 2) + abs(ay + ah / 2 - by - bh / 2)
+
+
 def route_all(requests, rects, bounds):
-    """requests: [{a, b (rectangles), via, from_side, to_side, straight}]. rects: every device rectangle (obstacles).
-    Returns a list of point lists (None where no clear route exists: the caller falls back to a plain route)."""
-    grid = Grid(rects, bounds)
+    """requests: [{a, b (rectangles), a_id, b_id, via, from_side, to_side, straight}]. rects: every device rectangle (obstacles).
+    Returns a list of point lists (None where no clear route exists: the caller falls back to a plain route).
+    Pass 1 routes the cables (short ones first, so they stay direct) and finds which cables share a side of a device; pass 2 spreads
+    those along the side and routes everything again."""
     results = [None] * len(requests)
-    auto = [n for n, q in enumerate(requests) if not q.get("via")]
+    auto = sorted((n for n, q in enumerate(requests) if not q.get("via")), key=lambda n: _manhattan(requests[n]))
     for n, q in enumerate(requests):
         if q.get("via"):
             results[n] = manual(q["a"], q["b"], q["via"], q.get("from_side"), q.get("to_side"))
-    fixed, first = {}, None                                            # pass 2: spread cables that share a side of a device
+    tidy = channel_routes(requests, rects, bounds)
+    for n in list(auto):
+        if tidy[n] is not None:
+            results[n] = tidy[n]
+    auto = [n for n in auto if tidy[n] is None]
+    if not auto:
+        return results
+    grid, fixed, first = Grid(rects, bounds), {}, None
     for attempt in (1, 2):
         occ = Occupancy()
         chosen = {}
@@ -313,36 +552,38 @@ def route_all(requests, rects, bounds):
             occ.add(grid, nodes)
             results[n] = _pts(grid, nodes, ap, bp)
             chosen[n] = (ap, bp)
-        if attempt == 1:
-            first = list(results)
-            groups = {}
-            for n, (ap, bp) in chosen.items():
-                groups.setdefault((requests[n]["a_id"], ap[1]), []).append((n, "a", ap, results[n]))
-                groups.setdefault((requests[n]["b_id"], bp[1]), []).append((n, "b", bp, results[n]))
-            moved = False
-            for (sid, sd), members in groups.items():
-                if len(members) < 2:
-                    continue
-                n0, end0 = members[0][0], members[0][1]
-                r = requests[n0]["a" if end0 == "a" else "b"]
-                horizontal_side = sd in ("left", "right")
-                def key(m):                                            # order along the side by where the cable heads next (no crossing near the device)
-                    pts = m[3] if m[1] == "a" else m[3][::-1]
-                    nxt = pts[1] if len(pts) > 1 else pts[0]
-                    far = pts[2] if len(pts) > 2 else nxt
-                    return (far[1] if horizontal_side else far[0])
-                members.sort(key=key)
-                e, lo, hi = side_extent(r, sd)
-                if len(members) > 5 or (hi - lo) < SPREAD * len(members) + 0.2:
-                    continue                                           # too many for this side: they stay on the middle
-                gap = SPREAD
-                mid = (lo + hi) / 2
-                for k, (n, end, prt, _) in enumerate(members):
-                    c = mid + (k - (len(members) - 1) / 2) * gap
-                    fixed[(n, end)] = (with_t(r, sd, c), sd)
-                    moved = True
-            if not moved:
-                break
+        if attempt == 2:
+            break
+        first = list(results)
+        groups = {}
+        for n, (ap, bp) in chosen.items():
+            groups.setdefault((requests[n]["a_id"], ap[1]), []).append((n, "a", ap, results[n]))
+            groups.setdefault((requests[n]["b_id"], bp[1]), []).append((n, "b", bp, results[n]))
+        extra_x, extra_y = [], []
+        for (sid, sd), members in groups.items():
+            if len(members) < 2:
+                continue
+            n0, end0 = members[0][0], members[0][1]
+            r = requests[n0]["a" if end0 == "a" else "b"]
+            horizontal_side = sd in ("left", "right")
+
+            def key(m):                                                # order along the side by where the cable heads next (no crossing near the device)
+                pts = m[3] if m[1] == "a" else m[3][::-1]
+                far = pts[2] if len(pts) > 2 else pts[-1]
+                return far[1] if horizontal_side else far[0]
+            members.sort(key=key)
+            e, lo, hi = side_extent(r, sd)
+            gap = min(SPREAD, (hi - lo - 0.2) / len(members))
+            if gap < 0.12:
+                continue                                               # too many for this side: they stay on the middle
+            for k, (n, end, prt, _) in enumerate(members):
+                c = (lo + hi) / 2 + (k - (len(members) - 1) / 2) * gap
+                pt = with_t(r, sd, c)
+                fixed[(n, end)] = (pt, sd)
+                (extra_y if horizontal_side else extra_x).append(pt[1] if horizontal_side else pt[0])
+        if not fixed:
+            break
+        grid = Grid(rects, bounds, extra_x, extra_y)                   # the grid now has a track for every spread position
     return results
 
 

@@ -16,7 +16,7 @@ The drawing area is 15.9 in wide and 9.9 in high; the footer sits below it.
 
 ## project (footer)
 Only values the user or the RFQ gave. A missing value prints `TBC` (`doc_name`, `revision` and `sheet` default to `Architecture`, `R0` and `1`). The older keys `contractor` and `rev` (`R0/1`) are still read as `client` and `revision` + `sheet`.
-The footer also always shows two fixed scope boxes between Notes and Legend: **Avanceon Scope** (light blue) and **Other Scope** (light pink).
+The footer also always shows two fixed scope boxes between Notes and Legend: **Avanceon Scope** (grey) and **Client Scope** (light pink).
 Size is always A3. A value too long for its footer cell stops the build.
 
 ## shapes
@@ -76,14 +76,22 @@ shapes) fix the ellipse yourself. Do not draw the ring as your own shape: use `r
 ## Page size is fixed
 The page is always A3 landscape. Coordinates, `via` points or ring boxes that fall outside the drawing area are pulled back inside and reported in `warnings`; the page never grows.
 
-## Scope blocks
-With "layers", each shape's "scope" ("avanceon" or "other") decides which block of its layer it sits on: Avanceon left (light blue), other scope right (light pink). No scope text is printed in the blocks.
+
 
 ## Cabling rules (automatic)
 Every cable in `lines` is routed by the program, so a prompt only needs `from`, `to` and `cable`:
 - square corners only; leaves and enters each device at a right angle, ON its edge, facing the other device when that is shortest;
 - never through a device (it goes round); straight when the devices line up, otherwise as few bends as possible;
+- in a layered drawing (devices in rows) cables run as drop - track - drop: leave by the top or bottom, run along their own track in the free band between the rows (tracks ordered to avoid crossings), enter by the top or bottom; neighbours in a row get one straight cable; devices that are not in rows use a grid router;
 - parallel cables take separate tracks; several cables on one side of a device are spread along that side;
 - unavoidable crossings are drawn as a small hop (the horizontal cable hops over the vertical one); T-junctions are not hopped;
 - in a layered drawing cables stay out of the dark-blue band.
 Manual instructions always win, per cable: `"from_side"` / `"to_side"` (`left`, `right`, `top`, `bottom`), `"via": [[x, y], ...]` (followed exactly, corners squared), `"straight": true` (prefer a straight cable). FO ring node links keep their own look.
+
+
+## Look and feel (reference style)
+- A blue frame surrounds the sheet; a bold blue **title** (`"title"` in the file, default the Document Name) sits in a strip above the layers.
+- Layers are white rows separated by thin blue lines. The left column of each row shows `LEVEL n` and the layer name in big blue bold, with a short description in black (from `data/layers.json`). Layers touch and fill the whole drawing area.
+- Scope is **not** coloured inside the layers; it appears only in the footer scope boxes (Avanceon grey, Client pink). Shapes may still carry `"scope"`; Avanceon shapes are placed first in a row.
+- `group` = dashed rounded blue box with its title in blue bold text inside the top edge.
+- Hardwired cables: all hardwired cables that meet at one I/O device share a single black bus line between the rows; an arrowhead points into the I/O device.

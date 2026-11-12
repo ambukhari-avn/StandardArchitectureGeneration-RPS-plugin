@@ -46,6 +46,11 @@ def render(page, path):
                                 (p[0] + (q[0] - p[0]) * min(i + 1, n) / n, p[1] + (q[1] - p[1]) * min(i + 1, n) / n)], fill=s["line"], width=max(1, int(s["lw"] * 1.3)))
                 else:
                     d.line([p, q], fill=s["line"], width=max(1, int(s["lw"] * 1.3)))
+            if s.get("arrow") and len(pts) > 1:                                 # filled arrowhead on the last point
+                (px_, py_), (qx, qy) = pts[-2], pts[-1]
+                L = max(1e-6, ((qx - px_) ** 2 + (qy - py_) ** 2) ** 0.5)
+                ux, uy = (qx - px_) / L, (qy - py_) / L
+                d.polygon([(qx, qy), (qx - 9 * ux + 4 * uy, qy - 9 * uy - 4 * ux), (qx - 9 * ux - 4 * uy, qy - 9 * uy + 4 * ux)], fill=s["line"])
         else:
             box = [X(s["x"]), Y(s["y"] + s["h"]), X(s["x"] + s["w"]), Y(s["y"])]
             if s["kind"] == "poly":

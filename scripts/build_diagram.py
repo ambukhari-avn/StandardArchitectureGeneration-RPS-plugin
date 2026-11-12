@@ -28,20 +28,21 @@ from vsdx_writer import A3_H, A3_W, FONT_FLOOR, Page, png_size, write_vsdx
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 MARGIN = footer.X0
-TOP, BOTTOM = A3_H - MARGIN, footer.TOP + 0.12      # the drawing area runs between these page heights
+TITLE_H, FRAME = 0.50, 0.12                          # title strip height; inset of the blue frame round the whole sheet
+TOP, BOTTOM = A3_H - MARGIN - TITLE_H, footer.TOP + 0.12      # the drawing area runs between these page heights
 AREA_W, AREA_H = A3_W - 2 * MARGIN, TOP - BOTTOM
 DEFAULT_SIZE = {"box": (1.35, 1.25), "picture": (1.35, 1.25), "text": (1.50, 0.30)}   # every device is a picture with its caption underneath
 MIN_DEVICE_H = 0.60                                     # a device cell shorter than this cannot hold a picture and a caption
 GENERIC_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "icons", "generic_device.png")
 BEHIND = ("zone", "group")                              # drawn first, behind the lines and shapes
 SEE_THROUGH = ("zone", "group", "pill")                 # lines may run over these; they are not obstacles
-GROUP_FILL, GROUP_LINE, PILL_BLUE = "#F3F8FE", "#7FA3D6", "#1456C0"
+GROUP_FILL, GROUP_LINE, PILL_BLUE = "#FFFFFF", "#1F4E9E", "#1456C0"
 PILL_LIGHT_FILL, PILL_LIGHT_LINE, PILL_LIGHT_TEXT = "#D9E9FB", "#2F6FD0", "#0B3C8C"
-CABLE_LW = 1.5
+CABLE_LW = 1.25
+BLUE = "#1F4E9E"                                         # the blue of the frame, titles, layer names and group boxes
 ZONE_FILL, ZONE_LINE = "#F7F9FC", "#9AA5B1"
 HEX = re.compile(r"#[0-9A-Fa-f]{6}$")
 LAYERS_PATH = os.path.join(ROOT, "data", "layers.json")
-SCOPE_LINE = "#123A7A"                                  # outline on scope-coloured boxes so they stand out on the layer panels
 
 
 class BuildError(ValueError):
@@ -201,9 +202,8 @@ def prepare(spec, comps, cables, spec_dir):
 
 
 # ---- layers (Purdue bands) ------------------------------------------------------------------------------------------------------
-LAYER_GAP, BAND_W, LAYER_PAD, LAYER_R = 0.12, 0.45, 0.15, 0.08
-BLOCK_GAP, BLOCK_PAD = 0.12, 0.08                         # space between scope blocks / between a block and its layer edge
-BAND_FILL, PANEL_FILL, PANEL_LINE = "#123A7A", "#E6EEF8", "#8EA9CC"      # dark-blue band, pale panel (the approved layer style)
+LAYER_GAP, BAND_W, LAYER_PAD, LAYER_R = 0.0, 1.90, 0.15, 0.0      # BAND_W is the width of the label column on the left of each layer
+PANEL_FILL, PANEL_LINE = "#FFFFFF", BLUE                     # white rows separated by thin blue lines (the approved reference style)
 
 
 def load_layers(path=LAYERS_PATH):
@@ -234,18 +234,17 @@ def apply_layers(spec, shapes, warnings):
     panels = []
     for i, t in enumerate(order):
         y = i * (h + LAYER_GAP)
-        panels.append(dict(id=t["id"], label=t["label"], x=0.0, y=y, w=AREA_W, h=h, blocks=[]))
+        panels.append(dict(id=t["id"], label=t["label"], level=t.get("level", ""), name=t.get("name", t["label"]), desc=t.get("desc", ""),
+                           x=0.0, y=y, w=AREA_W, h=h))
         members = [s for s in tagged if s["layer"] == t["id"]]
         if not members:
             continue
         left, width = BAND_W + LAYER_PAD, AREA_W - BAND_W - 2 * LAYER_PAD
         k = min(1.0, (h - 0.30) / max(s["h"] for s in members))      # a shape taller than its layer is scaled down to fit
-        groups = [[s for s in members if s["scope"] == sc] for sc in ("avanceon", "other", None)]
-        groups = [g for g in groups if g]                            # Avanceon on the left, other scope on the right, unscoped last
+        groups = [[s for sc in ("avanceon", "other", None) for s in members if s["scope"] == sc]]   # one row, Avanceon first
         auto = any(s["auto_x"] for s in members)
         if auto:
-            fixed = (len(groups) - 1) * BLOCK_GAP + sum((len(g) + 1) * 0.15 for g in groups)
-            k = min(k, (width - fixed) / sum(s["w"] for s in members))
+            k = min(k, (width - (len(members) + 1) * 0.15) / sum(s["w"] for s in members))
         if k < 1.0:
             if k < 0.5:
                 warnings.append("layer %r is very crowded (%d shapes); shapes were reduced to %.0f%% and may be hard to read" % (t["id"], len(members), 100 * max(k, 0.5)))
@@ -254,46 +253,36 @@ def apply_layers(spec, shapes, warnings):
                 s["w"], s["h"] = s["w"] * k, s["h"] * k
         for s in members:
             s["y"] = y + (h - s["h"]) / 2
-        by, bh = y + BLOCK_PAD, h - 2 * BLOCK_PAD
         if auto:
-            need = [sum(s["w"] for s in g) + (len(g) + 1) * 0.15 for g in groups]
-            extra = max(0.0, width - sum(need) - (len(groups) - 1) * BLOCK_GAP)
-            x = left
-            for g, nd in zip(groups, need):
-                bw = nd + extra * nd / sum(need)
-                gap = (bw - sum(s["w"] for s in g)) / (len(g) + 1)
-                cx = x + gap
-                for s in g:
-                    s["x"] = cx
-                    cx += s["w"] + gap
-                if g[0]["scope"]:
-                    panels[-1]["blocks"].append(dict(scope=g[0]["scope"], x=x, y=by, w=bw, h=bh))
-                x += bw + BLOCK_GAP
-        else:                                                        # positions given by the file: block = the span of that scope's shapes
-            for g in groups:
-                if g[0]["scope"]:
-                    x0, x1 = min(s["x"] for s in g) - 0.15, max(s["x"] + s["w"] for s in g) + 0.15
-                    panels[-1]["blocks"].append(dict(scope=g[0]["scope"], x=max(x0, left), y=by, w=min(x1, left + width) - max(x0, left), h=bh))
+            g = groups[0]
+            gap = (width - sum(s["w"] for s in g)) / (len(g) + 1)
+            cx = left + gap
+            for s in g:
+                s["x"] = cx
+                cx += s["w"] + gap
     return panels
 
 
 def draw_layer(page, p):
-    """One layer panel: pale rounded body, dark-blue band on the left with the layer name in white, rotated to read bottom to top."""
+    """One layer: a white row between thin blue lines, with the label column on the left: LEVEL n and the name in big blue bold, the
+    description under it in small black."""
     x, y, w, h = MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]
-    page.rect("zone", x, y, w, h, fill=PANEL_FILL, line=PANEL_LINE, lw=0.75, rounding=LAYER_R, key="layer:" + p["id"])
-    r = LAYER_R
-    pts = [(x + BAND_W, y)]                                                      # band: square on the right, rounded on the left
-    pts += [(x + r + r * math.cos(math.radians(270 - 15 * k)), y + r + r * math.sin(math.radians(270 - 15 * k))) for k in range(7)]
-    pts += [(x + r + r * math.cos(math.radians(180 - 15 * k)), y + h - r + r * math.sin(math.radians(180 - 15 * k))) for k in range(7)]
-    pts.append((x + BAND_W, y + h))
-    page.poly("zone", pts, fill=BAND_FILL, line=None, key="layer-band:" + p["id"])
-    for b in p.get("blocks", []):                                                # scope blocks: light blue Avanceon, light pink other scope, no text
-        page.rect("zone", MARGIN + b["x"], TOP - b["y"] - b["h"], b["w"], b["h"], fill=footer.SCOPE[b["scope"]][1], line=SCOPE_LINE, lw=0.75,
-                  rounding=0.06, key="scope-block:%s:%s" % (p["id"], b["scope"]))
-    size = fit_size(p["label"], h - 0.1, BAND_W - 0.06, (12, 11, 10, 9, 8, 7, 6.5, 6), True)
-    page.rect("text", x, y, BAND_W, h, fill=None, line=None, text=p["label"], size=size, bold=True, text_angle=90, color="#FFFFFF",
-              key="layer-name:" + p["id"])
+    page.rect("zone", x, y, w, h, fill=PANEL_FILL, line=PANEL_LINE, lw=1.0, key="layer:" + p["id"])
+    head = "%s\n%s" % (p["level"].upper(), p["name"].upper())
+    size = fit_size(max(head.split("\n"), key=len), BAND_W - 0.3, 0.3, (16, 14, 13, 12, 11, 10, 9), True)
+    cy = y + h / 2
+    page.text(x + 0.12, cy + 0.02, BAND_W - 0.2, 0.62, head, size=size, bold=True, color=BLUE, halign=0, valign=2, key="layer-name:" + p["id"])
+    if p["desc"]:
+        page.text(x + 0.12, cy - 0.62, BAND_W - 0.2, 0.58, p["desc"], size=8, halign=0, valign=0, key="layer-desc:" + p["id"])
     return size
+
+
+def draw_frame_and_title(page, title):
+    """Blue frame round the whole sheet, and the bold blue title in the strip above the layers."""
+    page.rect("zone", FRAME, FRAME, A3_W - 2 * FRAME, A3_H - 2 * FRAME, fill=None, line=BLUE, lw=2.25, key="frame")
+    top = A3_H - FRAME
+    size = fit_size(title, AREA_W - 0.4, top - TOP - 0.1, (24, 22, 20, 18, 16, 14, 12, 10), True)
+    page.text(MARGIN, TOP + 0.02, AREA_W, top - TOP - 0.06, title, size=size, bold=True, color=BLUE, key="title")
 
 
 # ---- fibre rings ------------------------------------------------------------------------------------------------------------
@@ -508,9 +497,11 @@ def draw_shape(page, s):
         if s["label"]:
             size, warn = label_size(s, w - 0.1, 0.25, (9, 8, 7, 6.5, 6), True)
             page.text(x + 0.05, y + h - 0.28, w - 0.1, 0.25, s["label"], size=size, bold=True, halign=0, valign=0)
-    elif s["kind"] == "group":                                      # dashed rounded container with a blue title pill on its top edge
+    elif s["kind"] == "group":                                      # dashed rounded blue box with its title in blue bold at the top
         page.rect("zone", x, y, w, h, fill=s["fill"] or GROUP_FILL, line=GROUP_LINE, lw=1.0, pattern=2, rounding=0.12, key=s["key"])
-        # no title pill: the dashed container stands on its own
+        if s["label"]:
+            size, warn = label_size(s, w - 0.3, 0.25, (11, 10, 9, 8, 7, 6.5), True)
+            page.text(x + 0.1, y + h - 0.32, w - 0.2, 0.28, s["label"], size=size, bold=True, color=BLUE, valign=0, key=s["key"] + ":title")
     elif s["kind"] == "pill":
         pass                                                        # label pills are not drawn any more (kind kept so older files still build)
     elif s["kind"] == "text":
@@ -559,6 +550,8 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     panels = apply_layers(spec, shapes, warnings)
     by_id = {s["id"]: s for s in shapes}
     page = Page()
+    given_title = spec.get("title") or spec.get("project", {}).get("doc_name") or "Architecture"
+    draw_frame_and_title(page, str(given_title).strip().upper())
     notes = [str(n) for n in spec.get("notes", [])]
     n_web = sum(1 for s in shapes if s["web"])
     if n_web:
@@ -587,8 +580,16 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     n_lines = 0
     obstacles = [rect_of(s) for s in shapes if s["kind"] not in SEE_THROUGH]
     x0 = MARGIN + (BAND_W + 0.05 if panels else 0.0)
+    wired = {}
+    for c in lines:                                                         # hardwired: the end with most hardwired cables is the hub (I/O); arrows point into it
+        if c["cable"] == "hardwired":
+            for end in (c["a"], c["b"]):
+                wired[end] = wired.get(end, 0) + 1
+    for c in lines:
+        if c["cable"] == "hardwired":
+            c["hub"] = c["a"] if wired[c["a"]] > wired[c["b"]] else c["b"]
     reqs = [dict(a=rect_of(by_id[c["a"]]), b=rect_of(by_id[c["b"]]), a_id=c["a"], b_id=c["b"], via=c["via"], straight=c["straight"],
-                 from_side=c.get("from_side"), to_side=c.get("to_side")) for c in lines]
+                 from_side=c.get("from_side"), to_side=c.get("to_side"), bus=c.get("hub")) for c in lines]
     try:
         routed = router.route_all(reqs, obstacles, (x0, BOTTOM, MARGIN + AREA_W, TOP))
     except Exception as e:                                                  # never lose the drawing over the router
@@ -603,7 +604,10 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
         paths.append(pts)
     for c, pts in zip(lines, router.add_hops(paths)):
         color, pattern = cables.line_style(c["cable"])
-        page.line(pts, color, pattern, lw=CABLE_LW, key="%s->%s" % (c["a"], c["b"]))
+        arrow = c.get("hub") is not None
+        if arrow and c["hub"] == c["a"]:
+            pts = pts[::-1]                                                 # the arrowhead is on the last point: make that the hub end
+        page.line(pts, color, pattern, lw=CABLE_LW, key="%s->%s" % (c["a"], c["b"]), arrow=arrow)
         n_lines += 1
     for c, pts in zip(lines, paths):
         if c["via"]:                                                        # a hand-routed cable may run through a device: say so
