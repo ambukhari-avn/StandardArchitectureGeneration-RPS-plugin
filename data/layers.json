@@ -1,0 +1,35 @@
+{
+ "_note": "Standard layers, top to bottom (Purdue). Style is fixed in scripts/build_diagram.py so every drawing looks the same. The model asks for layers by id; the program stacks them in this order.",
+ "layers": [
+  {
+   "id": "enterprise",
+   "label": "Enterprise Layer",
+   "level": "Level 4-5"
+  },
+  {
+   "id": "dmz",
+   "label": "DMZ Layer",
+   "level": "Level 3.5"
+  },
+  {
+   "id": "operations",
+   "label": "Operations Layer",
+   "level": "Level 3"
+  },
+  {
+   "id": "scada",
+   "label": "SCADA Layer",
+   "level": "Level 2"
+  },
+  {
+   "id": "control",
+   "label": "Control Layer",
+   "level": "Level 1"
+  },
+  {
+   "id": "field",
+   "label": "Field Layer",
+   "level": "Level 0"
+  }
+ ]
+}

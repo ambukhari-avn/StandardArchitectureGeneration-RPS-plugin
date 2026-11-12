@@ -4,6 +4,7 @@ A .vsdx is an OPC zip of XML. To stay inside what Visio accepts, the package ske
 content types) is taken from an existing Visio-made file passed as `base`; only the page contents, page size and
 core properties are replaced. The page is always A3 landscape - anything else is refused.
 """
+import math
 import re
 import struct
 import zipfile
@@ -23,13 +24,22 @@ class Page:
     def add(self, kind, role, x, y, w, h, parent=None, **kw):
         s = dict(id=len(self.shapes) + 1, kind=kind, role=role, x=x, y=y, w=w, h=h, parent=parent, fill=None,
                  line="#000000", lw=0.75, pattern=1, text="", size=6.5, bold=False, halign=1, valign=1, key=None,
-                 pts=None)
+                 pts=None, rounding=0, text_angle=0, color="#000000")
         s.update(kw)
         self.shapes.append(s)
         return s["id"]
 
     def rect(self, role, x, y, w, h, parent=None, **kw):
         return self.add("rect", role, x, y, w, h, parent, **kw)
+
+    def ellipse(self, role, x, y, w, h, parent=None, **kw):
+        """Ellipse inscribed in the w x h box (a real Visio ellipse, editable as one shape)."""
+        return self.add("ellipse", role, x, y, w, h, parent, **kw)
+
+    def poly(self, role, pts, parent=None, **kw):
+        """Closed filled polygon through pts."""
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        return self.add("poly", role, min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent, pts=pts, **kw)
 
     def text(self, x, y, w, h, text, parent=None, **kw):
         return self.add("rect", "text", x, y, w, h, parent, fill=None, line=None, text=text, **kw)
@@ -93,24 +103,38 @@ def shape_xml(s, rid=None):
           "<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
     c += ["<Cell N='%s' V='0.02'/>" % n for n in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin")]
     c.append("<Cell N='VerticalAlign' V='%d'/>" % s["valign"])
+    if s["rounding"]:
+        c.append("<Cell N='Rounding' V='%s'/>" % _f(s["rounding"]))
+    if s["text_angle"]:                         # text block turned by this many degrees (counter-clockwise), wrapped along the long side
+        tw, th = (h, w) if abs(s["text_angle"]) % 180 == 90 else (w, h)
+        c += ["<Cell N='TxtPinX' V='%s'/>" % _f(w / 2), "<Cell N='TxtPinY' V='%s'/>" % _f(h / 2),
+              "<Cell N='TxtWidth' V='%s'/>" % _f(tw), "<Cell N='TxtHeight' V='%s'/>" % _f(th),
+              "<Cell N='TxtLocPinX' V='%s'/>" % _f(tw / 2), "<Cell N='TxtLocPinY' V='%s'/>" % _f(th / 2),
+              "<Cell N='TxtAngle' V='%s'/>" % _f(math.radians(s["text_angle"]))]
     sec = ""                                    # section order matches Visio's own files: Character, Paragraph, User, Geometry
     if s["text"]:
-        sec += ("<Section N='Character'><Row IX='0'><Cell N='Color' V='#000000'/><Cell N='Style' V='%d'/>"
-                "<Cell N='Size' V='%s'/></Row></Section>" % (1 if s["bold"] else 0, _f(s["size"] / 72)))
+        sec += ("<Section N='Character'><Row IX='0'><Cell N='Color' V='%s'/><Cell N='Style' V='%d'/>"
+                "<Cell N='Size' V='%s'/></Row></Section>" % (s["color"], 1 if s["bold"] else 0, _f(s["size"] / 72)))
         sec += "<Section N='Paragraph'><Row IX='0'><Cell N='HorzAlign' V='%d'/></Row></Section>" % s["halign"]
     if s["key"]:
         rows = "<Row N='SourceKey'><Cell N='Value' V='%s' U='STR'/></Row>" % escape(str(s["key"]), {"'": "&apos;"})
         sec += "<Section N='User'>%s</Section>" % rows
     g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='%d'/><Cell N='NoLine' V='%d'/><Cell N='NoShow' V='0'/>"
          "<Cell N='NoSnap' V='0'/>" % (0 if filled else 1, 1 if line is None else 0))
-    if s["kind"] == "rect":
+    if s["kind"] == "ellipse":
+        g += ("<Row T='Ellipse' IX='1'><Cell N='X' V='%s' F='Width*0.5'/><Cell N='Y' V='%s' F='Height*0.5'/>"
+              "<Cell N='A' V='%s' F='Width*1'/><Cell N='B' V='%s' F='Height*0.5'/>"
+              "<Cell N='C' V='%s' F='Width*0.5'/><Cell N='D' V='%s' F='Height*1'/></Row>") % (
+                  _f(w / 2), _f(h / 2), _f(w), _f(h / 2), _f(w / 2), _f(h))
+    elif s["kind"] == "rect":
         rows = [("MoveTo", 0, 0, "", ""), ("LineTo", 1, 0, "Width*1", ""), ("LineTo", 1, 1, "Width*1", "Height*1"),
                 ("LineTo", 0, 1, "", "Height*1"), ("LineTo", 0, 0, "", "")]
         for i, (t, ax, ay, fx, fy) in enumerate(rows, 1):
             g += "<Row T='%s' IX='%d'><Cell N='X' V='%s'%s/><Cell N='Y' V='%s'%s/></Row>" % (
                 t, i, _f(ax * w), " F='%s'" % fx if fx else "", _f(ay * h), " F='%s'" % fy if fy else "")
-    else:                                       # polyline
-        for i, (px, py) in enumerate(s["pts"], 1):
+    else:                                       # polyline (closed for a polygon)
+        pts = list(s["pts"]) + ([s["pts"][0]] if s["kind"] == "poly" else [])
+        for i, (px, py) in enumerate(pts, 1):
             g += "<Row T='%s' IX='%d'><Cell N='X' V='%s'/><Cell N='Y' V='%s'/></Row>" % (
                 "MoveTo" if i == 1 else "LineTo", i, _f(px - x), _f(py - y))
     g += "</Section>"

@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import footer
 from vsdx_writer import A3_H, A3_W, FONT_FLOOR, Page, png_size, write_vsdx
 
-FIELDS = dict(end_user="King Saud University", contractor="CRCC", project="KSU Utilities and Facilities Relocation Project",
+FIELDS = dict(end_user="King Saud University", client="CRCC", project="KSU Utilities and Facilities Relocation Project",
               prepared_by="IH", checked_by="SA", approved_by="AP")
 LEGEND = [{"label": "Ethernet Cable", "color": "#0070C0"}, {"label": "Fiber Optical Cable", "color": "#00B050", "pattern": 2}]
 
@@ -55,12 +55,48 @@ class FooterTests(unittest.TestCase):
         pg, _ = build()
         self.assertIn("Size:  A3", [s["text"] for s in pg.shapes])
 
+    def test_new_labels_and_separate_revision_and_sheet(self):
+        pg, _ = build()
+        texts = [s["text"] for s in pg.shapes]
+        for t in ("End User:  King Saud University", "Client:  CRCC", "Document Name:  Architecture", "Revision:  R0", "Sheet:  1"):
+            self.assertIn(t, texts)
+        self.assertFalse(any("Documentation Name" in t or "Rev/Sheet" in t or "Contractor" in t for t in texts))
+        pg, _ = build(fields=dict(FIELDS, revision="R2", sheet="3"))
+        self.assertIn("Revision:  R2", [s["text"] for s in pg.shapes])
+        self.assertIn("Sheet:  3", [s["text"] for s in pg.shapes])
+
+    def test_old_contractor_and_rev_keys_still_work(self):
+        old = {k: v for k, v in FIELDS.items() if k != "client"}
+        pg, _ = build(fields=dict(old, contractor="CRCC", rev="R1/2"))
+        texts = [s["text"] for s in pg.shapes]
+        for t in ("Client:  CRCC", "Revision:  R1", "Sheet:  2"):
+            self.assertIn(t, texts)
+
+    def test_scope_boxes_are_fixed_colours_inside_the_footer_and_clear_of_the_legend(self):
+        pg, _ = build()
+        boxes = {s["key"]: s for s in pg.shapes if (s.get("key") or "").startswith("scope:")}
+        self.assertEqual(set(boxes), {"scope:avanceon", "scope:other"})
+        self.assertEqual(boxes["scope:avanceon"]["text"], "Avanceon Scope")
+        self.assertEqual(boxes["scope:other"]["text"], "Other Scope")
+        self.assertEqual(boxes["scope:avanceon"]["fill"].upper(), "#CFE8F7")
+        self.assertEqual(boxes["scope:other"]["fill"].upper(), "#D5EFD3")
+        legend_x = footer.X0 + footer.LEFT_W + footer.NOTES_W + footer.SCOPE_W
+        for b in boxes.values():
+            self.assertLessEqual(b["x"] + b["w"], legend_x + 1e-6)
+            self.assertGreaterEqual(b["x"], footer.X0 + footer.LEFT_W + footer.NOTES_W)
+        self.assertFalse(inter(boxes["scope:avanceon"], boxes["scope:other"]))
+        self.assertAlmostEqual(footer.X0 + footer.LEFT_W + footer.NOTES_W + footer.SCOPE_W + (footer.X1 - legend_x), footer.X1)
+
+    def test_footer_outer_size_unchanged(self):
+        self.assertAlmostEqual(footer.HEIGHT, 1.10)
+        self.assertAlmostEqual(footer.X1 - footer.X0, A3_W - 0.60, 3)
+
     def test_missing_field_fails_unless_tbc(self):
-        bad = dict(FIELDS, contractor="  ")
-        with self.assertRaisesRegex(footer.FooterError, "contractor"):
+        bad = dict(FIELDS, client="  ")
+        with self.assertRaisesRegex(footer.FooterError, "client"):
             build(fields=bad)
         pg, _ = build(fields=bad, allow_tbc=True)
-        self.assertIn("Contractor:  TBC", [s["text"] for s in pg.shapes])
+        self.assertIn("Client:  TBC", [s["text"] for s in pg.shapes])
 
     def test_overflow_fails_loudly(self):
         with self.assertRaises(footer.FooterError):

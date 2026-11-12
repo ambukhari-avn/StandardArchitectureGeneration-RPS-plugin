@@ -4,7 +4,7 @@ The questions live in data/footer_form.json (the single source of truth). A fill
 one 'Label: value' per line, or JSON keyed by field key:
 
     End User: King Saud University
-    Contractor: CRCC
+    Client: CRCC
     ...
     Notes:
     Two ASPs are considered for each existing building.

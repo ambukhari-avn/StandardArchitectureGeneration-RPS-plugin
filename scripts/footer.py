@@ -21,10 +21,14 @@ LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "base", "a
 X0, Y0, HEIGHT = 0.30, 0.30, 1.10
 X1 = A3_W - 0.30
 TOP = Y0 + HEIGHT                       # diagram content must stay above this line
-LEFT_W, NOTES_W = 6.20, 4.70            # title block / notes widths; the legend takes the rest
+LEFT_W, NOTES_W, SCOPE_W = 6.20, 3.90, 1.60   # title block / notes / scope-box widths; the cable legend takes the rest
 
-REQUIRED = ("end_user", "contractor", "project", "prepared_by", "checked_by", "approved_by")
-DEFAULTS = {"doc_name": "Architecture", "rev": "R0/1"}   # Maaden / KSU convention; override per project
+# Fixed scope colours (the same on every diagram). Shapes use them through their "scope" field in build_diagram.py.
+SCOPE = {"avanceon": ("Avanceon Scope", "#CFE8F7"),     # light blue
+         "other": ("Other Scope", "#D5EFD3")}           # light green
+
+REQUIRED = ("end_user", "client", "project", "prepared_by", "checked_by", "approved_by")
+DEFAULTS = {"doc_name": "Architecture", "revision": "R0", "sheet": "1"}   # Maaden / KSU convention; override per project
 LEGEND_ROWS, LEGEND_ROW_H, LEGEND_MAX_COLS = 4, 0.20, 2
 
 
@@ -45,6 +49,15 @@ def _clean(v):
 
 
 def _check_fields(fields, allow_tbc):
+    fields = dict(fields)
+    if "contractor" in fields and "client" not in fields:       # older diagram files / forms: Contractor is now Client
+        fields["client"] = fields.pop("contractor")
+    if "rev" in fields:                                         # older combined "R0/1" -> Revision + Sheet
+        old = _clean(fields.pop("rev"))
+        rv, _, sh = old.partition("/")
+        fields.setdefault("revision", rv)
+        if sh:
+            fields.setdefault("sheet", sh)
     f = dict(DEFAULTS)
     f.update({k: _clean(v) for k, v in fields.items() if v is not None})
     missing = [k for k in REQUIRED if not f.get(k)]
@@ -71,10 +84,10 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
     """Add the footer shapes to `page` (must be A3). Returns {'top', 'block', 'sizes'}.
 
     logo_path : PNG placed in the logo cell (default: base/avanceon_logo.png). None -> logo_text is printed instead.
-    fields : end_user, contractor, project, prepared_by, checked_by, approved_by (+ optional doc_name, rev)
+    fields : end_user, client, project, prepared_by, checked_by, approved_by (+ optional doc_name, revision, sheet)
     legend : [{'label', 'color': '#RRGGBB', 'pattern': 1|2, 'kind': 'line'|'box'}]  - line = cable type, box = scope swatch
     notes  : list of strings; numbered automatically
-    Size is always printed as A3 and is not an input.
+    Size is always printed as A3 and is not an input. The two scope boxes (Avanceon / Other) are always drawn, in fixed colours (SCOPE).
     """
     if abs(page.w - A3_W) > 0.01 or abs(page.h - A3_H) > 0.01:
         raise FooterError("page must be A3 landscape")
@@ -87,15 +100,16 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
     xl = X0 + LEFT_W
     cells = [  # key, text, x, y, w, h, preferred pt, halign
         ("end_user", "End User:  " + f["end_user"], X0, 1.0333, 3.10, 0.3667, 8, 0),
-        ("contractor", "Contractor:  " + f["contractor"], X0 + 3.10, 1.0333, 3.10, 0.3667, 8, 0),
+        ("client", "Client:  " + f["client"], X0 + 3.10, 1.0333, 3.10, 0.3667, 8, 0),
         ("project", "Project:  " + f["project"], X0, 0.6667, LEFT_W, 0.3666, 8, 0),
         ("logo", logo_text, X0, Y0, 1.50, 0.3667, 12, 1),
-        ("doc_name", "Documentation Name:  " + f["doc_name"], X0 + 1.50, 0.4833, LEFT_W - 1.50, 0.1834, 7, 0),
+        ("doc_name", "Document Name:  " + f["doc_name"], X0 + 1.50, 0.4833, LEFT_W - 1.50, 0.1834, 7, 0),
         ("prepared_by", "Prepared by:  " + f["prepared_by"], X0 + 1.50, Y0, 1.00, 0.1833, 6.5, 0),
         ("checked_by", "Checked by:  " + f["checked_by"], X0 + 2.50, Y0, 1.00, 0.1833, 6.5, 0),
         ("approved_by", "Approved by:  " + f["approved_by"], X0 + 3.50, Y0, 1.00, 0.1833, 6.5, 0),
-        ("size", "Size:  A3", X0 + 4.50, Y0, 0.80, 0.1833, 6.5, 0),
-        ("rev", "Rev/Sheet:  " + f["rev"], X0 + 5.30, Y0, 0.90, 0.1833, 6.5, 0),
+        ("size", "Size:  A3", X0 + 4.50, Y0, 0.55, 0.1833, 6.5, 0),
+        ("revision", "Revision:  " + f["revision"], X0 + 5.05, Y0, 0.65, 0.1833, 6.5, 0),
+        ("sheet", "Sheet:  " + f["sheet"], X0 + 5.70, Y0, 0.50, 0.1833, 6.5, 0),
     ]
     for key, text, x, y, w, h, pref, ha in cells:
         if key == "logo" and logo_path:                     # the logo is a picture, not text
@@ -124,8 +138,19 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
         sizes["notes"] = size
         page.text(xl + 0.03, Y0 + 0.03, NOTES_W - 0.06, HEIGHT - 0.26, body, nb, size=size, halign=0, valign=0)
 
+    # ---- scope boxes (fixed colours) --------------------------------------------------------------------------
+    xs = xl + NOTES_W
+    sb = page.rect("block", xs, Y0, SCOPE_W, HEIGHT, foot, fill=None, lw=0.5)
+    bw, bh, gap = SCOPE_W - 0.20, 0.40, 0.10
+    for i, (skey, (slabel, scolor)) in enumerate(SCOPE.items()):
+        by = TOP - 0.10 - bh - i * (bh + gap)
+        ssize = _fit(slabel, bw, bh - 0.04, (8, 7, 6.5, 6), what="scope label")
+        sizes["scope:" + skey] = ssize
+        page.rect("icon", xs + 0.10, by, bw, bh, sb, fill=scolor, line="#404040", lw=0.5, text=slabel, size=ssize,
+                  halign=1, valign=1, key="scope:" + skey)
+
     # ---- legend -----------------------------------------------------------------------------------------------
-    xg = xl + NOTES_W
+    xg = xs + SCOPE_W
     lg = page.rect("block", xg, Y0, X1 - xg, HEIGHT, foot, fill=None, lw=0.5)
     page.text(xg, TOP - 0.22, X1 - xg, 0.20, "Legend", lg, size=8, bold=True)
     cols = 1 if len(legend) <= LEGEND_ROWS else 2
@@ -135,13 +160,13 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
         x = xg + 0.10 + c * colw
         y = TOP - 0.30 - LEGEND_ROW_H * (r + 1)
         label = _clean(e["label"])
-        size = _fit(label, colw - 0.85, LEGEND_ROW_H - 0.02, (7, 6.5, 6), what="legend entry")
+        size = _fit(label, colw - 0.65, LEGEND_ROW_H - 0.02, (7, 6.5, 6), what="legend entry")
         if e.get("kind", "line") == "line":
-            page.line([(x, y + LEGEND_ROW_H / 2), (x + 0.6, y + LEGEND_ROW_H / 2)], e["color"], e.get("pattern", 1), 1.0, lg,
+            page.line([(x, y + LEGEND_ROW_H / 2), (x + 0.45, y + LEGEND_ROW_H / 2)], e["color"], e.get("pattern", 1), 1.0, lg,
                       key="legend:" + label)
         else:
-            page.rect("icon", x, y + 0.03, 0.6, LEGEND_ROW_H - 0.06, lg, fill=e["color"], line="#404040", lw=0.5, key="legend:" + label)
-        page.text(x + 0.70, y, colw - 0.80, LEGEND_ROW_H, label, lg, size=size, halign=0)
+            page.rect("icon", x, y + 0.03, 0.45, LEGEND_ROW_H - 0.06, lg, fill=e["color"], line="#404040", lw=0.5, key="legend:" + label)
+        page.text(x + 0.55, y, colw - 0.60, LEGEND_ROW_H, label, lg, size=size, halign=0)
     return {"top": TOP, "block": foot, "sizes": sizes}
 
 
@@ -161,7 +186,7 @@ if __name__ == "__main__":
                     help="existing Visio-made .vsdx used as the package skeleton (or set ARCH_BASE_VSDX)")
     ap.add_argument("--out", default=os.path.join(os.path.expanduser("~"), "Downloads", "out", "footer_demo.vsdx"))
     ap.add_argument("--tbc", action="store_true", help="fill missing fields with TBC")
-    for k in REQUIRED + ("doc_name", "rev"):
+    for k in REQUIRED + ("doc_name", "revision", "sheet"):
         ap.add_argument("--" + k.replace("_", "-"), help="overrides the form value")
     a = ap.parse_args()
     if a.print_form:
@@ -170,7 +195,7 @@ if __name__ == "__main__":
     if not a.base:
         ap.error("--base (or ARCH_BASE_VSDX) is required")
     fields, notes = ({}, []) if not a.form else parse_form(open(a.form, encoding="utf-8-sig").read())
-    fields.update({k: getattr(a, k) for k in REQUIRED + ("doc_name", "rev") if getattr(a, k)})
+    fields.update({k: getattr(a, k) for k in REQUIRED + ("doc_name", "revision", "sheet") if getattr(a, k)})
     pg = Page()
     pg.rect("frame", 0.20, 0.20, A3_W - 0.40, A3_H - 0.40, fill=None, lw=1.25)
     from cables import Cables

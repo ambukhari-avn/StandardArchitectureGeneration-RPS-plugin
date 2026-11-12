@@ -1,11 +1,11 @@
 {
-  "_note": "Cable types from the client's 'System Architecture Drawing Instructions.docx' (section 1). Field-PLC control signals are always hardwired, so both rows of the client's table (both black) are one type here. The document gives no dash style, so every type is solid (pattern 1). Legend wording is the client's 'Connection type' column plus its note for Ethernet; confirm. pattern: 1 = solid, 2 = dashed.",
+  "_note": "Cable standard (user decision, 12 Nov 2026): Hardwired instrument/control black solid; Ethernet blue dashed; Modbus red solid; Fiber optic green dashed; BACnet purple solid. pattern: 1 = solid, 2 = dashed. Legend wording is the user's 'Cable / interface' column.",
   "status": "client",
   "cables": [
-    {"id": "ethernet", "label": "Ethernet (Cu)", "color": "#0000FF", "pattern": 1},
-    {"id": "fibre",    "label": "Fibre",         "color": "#FF0000", "pattern": 1},
-    {"id": "modbus",   "label": "Modbus",        "color": "#00B000", "pattern": 1},
-    {"id": "bacnet",   "label": "BACnet",        "color": "#7030A0", "pattern": 1},
-    {"id": "hardwired","label": "Hardwired",     "color": "#000000", "pattern": 1}
+    {"id": "ethernet", "label": "Ethernet",                     "color": "#0000FF", "pattern": 2},
+    {"id": "fibre",    "label": "Fiber optic",                  "color": "#00B000", "pattern": 2},
+    {"id": "modbus",   "label": "Modbus",                       "color": "#FF0000", "pattern": 1},
+    {"id": "bacnet",   "label": "BACnet",                       "color": "#7030A0", "pattern": 1},
+    {"id": "hardwired","label": "Hardwired instrument/control", "color": "#000000", "pattern": 1}
   ]
 }

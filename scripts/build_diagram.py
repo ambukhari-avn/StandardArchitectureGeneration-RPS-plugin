@@ -18,9 +18,10 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import footer
+import pictures
 from cables import CableError, Cables
 from components import Components
-from draw import BOX_FILL, BOX_LINE, BOX_SIZES, draw_picture
+from draw import BOX_FILL, BOX_LINE, BOX_SIZES, LABEL_SIZES, LABEL_ZONE, draw_picture
 from textfit import TextFitError, fit_size
 from vsdx_writer import A3_H, A3_W, FONT_FLOOR, Page, png_size, write_vsdx
 
@@ -28,9 +29,18 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 MARGIN = footer.X0
 TOP, BOTTOM = A3_H - MARGIN, footer.TOP + 0.12      # the drawing area runs between these page heights
 AREA_W, AREA_H = A3_W - 2 * MARGIN, TOP - BOTTOM
-DEFAULT_SIZE = {"box": (1.35, 0.55), "picture": (1.00, 0.95), "text": (1.50, 0.30)}
+DEFAULT_SIZE = {"box": (1.35, 1.25), "picture": (1.35, 1.25), "text": (1.50, 0.30)}   # every device is a picture with its caption underneath
+MIN_DEVICE_H = 0.60                                     # a device cell shorter than this cannot hold a picture and a caption
+GENERIC_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "icons", "generic_device.png")
+BEHIND = ("zone", "group")                              # drawn first, behind the lines and shapes
+SEE_THROUGH = ("zone", "group", "pill")                 # lines may run over these; they are not obstacles
+GROUP_FILL, GROUP_LINE, PILL_BLUE = "#F3F8FE", "#7FA3D6", "#1456C0"
+PILL_LIGHT_FILL, PILL_LIGHT_LINE, PILL_LIGHT_TEXT = "#D9E9FB", "#2F6FD0", "#0B3C8C"
+CABLE_LW = 1.5
 ZONE_FILL, ZONE_LINE = "#F7F9FC", "#9AA5B1"
 HEX = re.compile(r"#[0-9A-Fa-f]{6}$")
+LAYERS_PATH = os.path.join(ROOT, "data", "layers.json")
+SCOPE_LINE = "#123A7A"                                  # outline on scope-coloured boxes so they stand out on the layer panels
 
 
 class BuildError(ValueError):
@@ -77,10 +87,14 @@ def prepare(spec, comps, cables, spec_dir):
             continue
         ids.add(sid)
         kind = s.get("kind", "box")
-        if kind not in ("box", "zone", "text"):
-            errors.append('%s: kind must be "box", "zone" or "text"' % where)
+        if kind not in ("box", "zone", "text", "group", "pill"):
+            errors.append('%s: kind must be "box" (a device: picture with caption), "zone", "group", "pill" or "text"' % where)
             continue
         label, pic, key, web = str(s.get("label", "")).strip(), None, "shape:" + sid, False
+        sub = str(s.get("sublabel", "")).strip() or None
+        if sub is None and "\n" in label:                              # "SCADA Server\n(Primary)": first line is the name, the rest the blue line
+            label, _, rest = label.partition("\n")
+            label, sub = label.strip(), (rest.replace("\n", " ").strip() or None)
         if s.get("component"):
             try:
                 comp = comps.get(s["component"])
@@ -98,15 +112,36 @@ def prepare(spec, comps, cables, spec_dir):
                 key = "image:%s|%s" % (s.get("image_source", "unknown"), sid)
             except (OSError, ValueError) as e:
                 warnings.append("%s: picture not usable (%s); drawn as a box" % (where, e))
+        if pic and kind == "box":                                       # transparent background, trimmed, not oversized
+            pic, note = pictures.prepare(pic)
+            if note:
+                warnings.append("%s: %s" % (where, note))
+        elif kind == "box":                                             # no picture given: a generic device icon, never a plain box
+            pic, key = GENERIC_ICON, "generic:" + sid
+            warnings.append("%s: no picture (give \"component\" or \"image\"); a generic device icon is used" % where)
         x, y = _num(s.get("x")), _num(s.get("y"))
+        layer = s.get("layer")
+        auto_x = layer is not None and x is None
+        if layer is not None:
+            if kind in BEHIND:
+                errors.append("%s: a %s cannot be placed in a layer" % (where, kind))
+                continue
+            x, y = (0.0 if x is None else x), 0.0                  # y is set by the layer (centred); x too unless given
         if x is None or y is None:
             errors.append("%s: x and y (inches from the top-left of the drawing area) are required" % where)
             continue
-        dw, dh = DEFAULT_SIZE["picture" if pic and kind == "box" else kind if kind != "zone" else "box"]
-        w, h = _num(s.get("w", dw if kind != "zone" else None)), _num(s.get("h", dh if kind != "zone" else None))
+        needs_size = kind in ("zone", "group")
+        if kind == "pill":
+            dw, dh = min(4.0, 0.085 * len(label) + 0.6), 0.26
+        else:
+            dw, dh = DEFAULT_SIZE["picture" if pic and kind == "box" else kind if not needs_size else "box"]
+        w, h = _num(s.get("w", None if needs_size else dw)), _num(s.get("h", None if needs_size else dh))
         if w is None or h is None or w <= 0 or h <= 0:
-            errors.append("%s: w and h must be positive numbers%s" % (where, " (zones need them)" if kind == "zone" else ""))
+            errors.append("%s: w and h must be positive numbers%s" % (where, " (zones and groups need them)" if needs_size else ""))
             continue
+        if kind == "box" and h < MIN_DEVICE_H:
+            warnings.append("%s: too short for a picture and its caption; raised to %.2f in" % (where, MIN_DEVICE_H))
+            h = MIN_DEVICE_H
         if w > AREA_W or h > AREA_H:
             warnings.append("%s: larger than the drawing area (%.1f x %.1f in); reduced" % (where, AREA_W, AREA_H))
             w, h = min(w, AREA_W), min(h, AREA_H)
@@ -117,8 +152,18 @@ def prepare(spec, comps, cables, spec_dir):
         if fill is not None and not (isinstance(fill, str) and HEX.match(fill)):
             warnings.append("%s: fill must be #RRGGBB; ignored" % where)
             fill = None
+        line = None
+        scope = s.get("scope")
+        if scope is not None:
+            if scope not in footer.SCOPE:
+                warnings.append('%s: scope must be "avanceon" or "other"; ignored' % where)
+            else:
+                line = SCOPE_LINE
+                if fill is None or pic:                                 # a device picture sits on a scope-coloured tile
+                    fill = footer.SCOPE[scope][1]
         shapes.append(dict(id=sid, kind=kind, label=label, pic=pic, web=web, key=key, x=cx, y=cy, w=w, h=h, fill=fill,
-                           dashed=bool(s.get("dashed")), bold=bool(s.get("bold")), size=_num(s.get("size")), where=where))
+                           dashed=bool(s.get("dashed")), bold=bool(s.get("bold")), size=_num(s.get("size")), where=where,
+                           layer=layer, auto_x=auto_x, line=line, sub=sub, scope=scope if scope in footer.SCOPE else None))
     lines = []
     for n, c in enumerate(spec.get("lines", []), 1):
         where = "line %d" % n
@@ -139,6 +184,193 @@ def prepare(spec, comps, cables, spec_dir):
     if errors:
         raise BuildError("\n  ".join(["cannot draw this file:"] + errors))
     return shapes, lines, warnings
+
+
+# ---- layers (Purdue bands) ------------------------------------------------------------------------------------------------------
+LAYER_GAP, BAND_W, LAYER_PAD, LAYER_R = 0.12, 0.45, 0.15, 0.08
+BAND_FILL, PANEL_FILL, PANEL_LINE = "#123A7A", "#E6EEF8", "#8EA9CC"      # dark-blue band, pale panel (the approved layer style)
+
+
+def load_layers(path=LAYERS_PATH):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)["layers"]
+
+
+def apply_layers(spec, shapes, warnings):
+    """Stack the requested layers in the standard order so together they fill the whole drawing area, and place the shapes tagged with
+    a layer: spread evenly across the layer's width and centred in its height. Returns the panels [{id, label, x, y, w, h}]
+    (inches from the top-left of the drawing area). No "layers" in the file: nothing happens and shapes stay where they were put."""
+    wanted = spec.get("layers")
+    tagged = [s for s in shapes if s["layer"] is not None]
+    if wanted is None:
+        if tagged:
+            raise BuildError('shapes use "layer" but the file has no "layers" list, e.g. "layers": ["scada", "control", "field"]')
+        return []
+    table = load_layers()
+    ids = [t["id"] for t in table]
+    if not isinstance(wanted, list) or not wanted or any(w not in ids for w in wanted) or len(set(wanted)) != len(wanted):
+        raise BuildError('"layers" must be a list of distinct layer ids from: %s' % ", ".join(ids))
+    bad = sorted({s["layer"] for s in tagged if s["layer"] not in wanted})
+    if bad:
+        raise BuildError("shape layer(s) %s are not in the file's \"layers\" list" % ", ".join(repr(b) for b in bad))
+    order = [t for t in table if t["id"] in wanted]                 # standard order, whatever order the file gave
+    n = len(order)
+    h = (AREA_H - (n - 1) * LAYER_GAP) / n                           # equal bands: the full drawing area, nothing left empty
+    panels = []
+    for i, t in enumerate(order):
+        y = i * (h + LAYER_GAP)
+        panels.append(dict(id=t["id"], label=t["label"], x=0.0, y=y, w=AREA_W, h=h))
+        members = [s for s in tagged if s["layer"] == t["id"]]
+        if not members:
+            continue
+        left, width = BAND_W + LAYER_PAD, AREA_W - BAND_W - 2 * LAYER_PAD
+        k = min(1.0, (h - 0.20) / max(s["h"] for s in members))      # a shape taller than its layer is scaled down to fit
+        if all(not s["auto_x"] for s in members):                    # every x given by the file: keep them
+            fit_w = None
+        else:
+            fit_w = (width - (len(members) + 1) * 0.15) / sum(s["w"] for s in members)
+            k = min(k, fit_w)
+        if k < 1.0:
+            if k < 0.5:
+                warnings.append("layer %r is very crowded (%d shapes); shapes were reduced to %.0f%% and may be hard to read" % (t["id"], len(members), 100 * max(k, 0.5)))
+                k = max(k, 0.5)
+            for s in members:
+                s["w"], s["h"] = s["w"] * k, s["h"] * k
+        for s in members:
+            s["y"] = y + (h - s["h"]) / 2
+        if fit_w is not None:
+            gap = (width - sum(s["w"] for s in members)) / (len(members) + 1)
+            x = left + gap
+            for s in members:
+                s["x"] = x
+                x += s["w"] + gap
+    return panels
+
+
+def draw_layer(page, p):
+    """One layer panel: pale rounded body, dark-blue band on the left with the layer name in white, rotated to read bottom to top."""
+    x, y, w, h = MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]
+    page.rect("zone", x, y, w, h, fill=PANEL_FILL, line=PANEL_LINE, lw=0.75, rounding=LAYER_R, key="layer:" + p["id"])
+    r = LAYER_R
+    pts = [(x + BAND_W, y)]                                                      # band: square on the right, rounded on the left
+    pts += [(x + r + r * math.cos(math.radians(270 - 15 * k)), y + r + r * math.sin(math.radians(270 - 15 * k))) for k in range(7)]
+    pts += [(x + r + r * math.cos(math.radians(180 - 15 * k)), y + h - r + r * math.sin(math.radians(180 - 15 * k))) for k in range(7)]
+    pts.append((x + BAND_W, y + h))
+    page.poly("zone", pts, fill=BAND_FILL, line=None, key="layer-band:" + p["id"])
+    size = fit_size(p["label"], h - 0.1, BAND_W - 0.06, (12, 11, 10, 9, 8, 7, 6.5, 6), True)
+    page.rect("text", x, y, BAND_W, h, fill=None, line=None, text=p["label"], size=size, bold=True, text_angle=90,
+              key="layer-name:" + p["id"])
+    return size
+
+
+# ---- fibre rings ------------------------------------------------------------------------------------------------------------
+RING_FILL = "#E5F8E5"                                   # light green inside the ring (approved ring illustration)
+RING_GAP, RING_H, RING_MARGIN, RING_MIN_W = 0.50, 0.60, 0.90, 3.0
+
+
+def prepare_rings(spec, shapes, cables):
+    """Validated rings: [{'id', 'label', 'cable', 'nodes': [shape ids in connection order], 'box': None | (x, y, w, h)}].
+    Raises BuildError for what cannot be drawn."""
+    raw = spec.get("rings", [])
+    if not isinstance(raw, list):
+        raise BuildError('"rings" must be a list')
+    by_id = {s["id"]: s for s in shapes}
+    errors, rings = [], []
+    for n, r in enumerate(raw, 1):
+        where = "ring %d" % n
+        if not isinstance(r, dict):
+            errors.append("%s: not an object" % where)
+            continue
+        nodes = [str(v) for v in r.get("nodes", [])] if isinstance(r.get("nodes"), list) else []
+        cable = r.get("cable", "fibre")
+        try:
+            cables.get(cable)
+        except CableError as e:
+            errors.append("%s: %s" % (where, e))
+        if len(nodes) < 2:
+            errors.append('%s: a ring needs its connected elements listed in "nodes" (at least 2)' % where)
+        bad = [v for v in nodes if v not in by_id or by_id[v]["kind"] in SEE_THROUGH]
+        if bad:
+            errors.append("%s: node(s) %s are not shapes" % (where, ", ".join(repr(v) for v in bad)))
+        if len(set(nodes)) != len(nodes):
+            errors.append("%s: a node is listed twice; list each element once" % where)
+        box = None
+        if any(k in r for k in ("x", "y", "w", "h")):
+            vals = [_num(r.get(k)) for k in ("x", "y", "w", "h")]
+            if None in vals or vals[2] <= 0 or vals[3] <= 0:
+                errors.append("%s: x, y, w and h must all be given as numbers (w and h positive), or all left out" % where)
+            else:
+                box = tuple(vals)
+        rings.append(dict(id=str(r.get("id", "ring%d" % n)), label=str(r.get("label", "Fiber Optic Ring")).strip(), cable=cable,
+                          nodes=nodes, box=box, where=where))
+    if errors:
+        raise BuildError("\n  ".join(["cannot draw this file:"] + errors))
+    return rings
+
+
+def ring_ellipse(rects, box, warnings, where):
+    """The ring ellipse (x, y, w, h in page inches). From the ring's own x/y/w/h if given; otherwise sized to its nodes: between the
+    upper and lower groups of nodes, or just below (else above) the row when all nodes are on one side."""
+    if box:
+        x, y, w, h = box
+        return MARGIN + x, TOP - y - h, w, h
+    cx = [r[0] + r[2] / 2 for r in rects]
+    cy = [r[1] + r[3] / 2 for r in rects]
+    x0, x1 = min(cx) - RING_MARGIN, max(cx) + RING_MARGIN
+    w = max(RING_MIN_W, x1 - x0)
+    x0 = min(max((x0 + x1) / 2 - w / 2, MARGIN), MARGIN + AREA_W - w)
+    if max(cy) - min(cy) > 0.5:                                   # nodes above and below the ring
+        mid = (max(cy) + min(cy)) / 2
+        upper_bottom = min(r[1] for r in rects if r[1] + r[3] / 2 > mid)
+        lower_top = max(r[1] + r[3] for r in rects if r[1] + r[3] / 2 <= mid)
+        gap = upper_bottom - lower_top
+        h = min(0.9, max(0.35, gap - 2 * 0.25))
+        if gap < 0.6:
+            warnings.append("%s: the rows of nodes are only %.2f in apart; move them apart so the ring ellipse fits between them" % (where, gap))
+        return x0, (upper_bottom + lower_top) / 2 - h / 2, w, h
+    below = min(r[1] for r in rects) - RING_GAP - RING_H          # one row: ring below it, or above if there is no room
+    if below < BOTTOM:
+        below = max(r[1] + r[3] for r in rects) + RING_GAP
+    return x0, below, w, RING_H
+
+
+def draw_rings(page, rings, by_id, cables, shapes, warnings):
+    """Behind-the-shapes part of each ring: the dashed ellipse with its label. Returns [(ring, ellipse)] for draw_ring_links."""
+    out = []
+    for r in rings:
+        rects = [rect_of(by_id[v]) for v in r["nodes"]]
+        ex, ey, ew, eh = ring_ellipse(rects, r["box"], warnings, r["where"])
+        color, pattern = cables.line_style(r["cable"])
+        label = r["label"]
+        size = fit_size(label, ew * 0.7, eh * 0.6, (10, 9, 8, 7, 6.5, 6), True) if label else 8
+        page.ellipse("ring", ex, ey, ew, eh, fill=RING_FILL, line=color, lw=1.5, pattern=2, text=label, size=size, bold=True,
+                     key="ring:%s" % r["id"])
+        out.append((r, (ex, ey, ew, eh)))
+    return out
+
+
+def draw_ring_links(page, placed, by_id, cables, shapes, warnings):
+    """Straight links (in the ring cable's colour and dash, so green dashed for fibre) from each node to the ring ellipse, coming out of the ring the way the approved illustration shows it:
+    nodes above the ring join its top, nodes below join its bottom. Returns the link count."""
+    n = 0
+    for r, (ex, ey, ew, eh) in placed:
+        color, pattern = cables.line_style(r["cable"])        # the node links use the ring cable's own colour and dash (fibre: green dashed)
+        ecx, ecy, a, b = ex + ew / 2, ey + eh / 2, ew / 2, eh / 2
+        for v in r["nodes"]:
+            nx, ny, nw, nh = rect_of(by_id[v])
+            px = nx + nw / 2
+            above = ny + nh / 2 > ecy
+            dx = max(-0.98, min(0.98, (px - ecx) / a))
+            if abs(px - ecx) >= a:
+                warnings.append("%s: node %r lies beyond the end of the ring ellipse; widen the ring (x, w) or move the node" % (r["where"], v))
+            ye = ecy + (1 if above else -1) * b * math.sqrt(1 - dx * dx)
+            pts = [(px, ny if above else ny + nh), (px, ye)]
+            page.line(pts, color, pattern, lw=1.25, key="ring:%s:%s" % (r["id"], v))
+            n += 1
+            for s in shapes:
+                if s["kind"] not in SEE_THROUGH and s["id"] != v and crosses(pts, rect_of(s)):
+                    warnings.append("%s: the link from %r to the ring passes through shape %r; move one of them" % (r["where"], v, s["id"]))
+    return n
 
 
 # ---- geometry (page coordinates, inches, y up) ----------------------------------------------------------------------------
@@ -198,7 +430,7 @@ def crosses(pts, r, inset=0.03):
 
 
 def overlapping(shapes):
-    pairs, boxes = [], [s for s in shapes if s["kind"] != "zone"]
+    pairs, boxes = [], [s for s in shapes if s["kind"] not in SEE_THROUGH]
     for i, a in enumerate(boxes):
         for b in boxes[i + 1:]:
             if min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"]) > 0.02 and \
@@ -218,6 +450,13 @@ def label_size(s, w, h, sizes, bold=False):
         return FONT_FLOOR, "%s: label may not fit its box; make it larger or shorter" % s["where"]
 
 
+def pill(page, x, y, w, h, text, solid, key):
+    """A rounded label: solid blue with white text (a group's title) or light blue with dark-blue text (a bus label)."""
+    size = fit_size(text, w - 0.2, h - 0.04, (10, 9, 8, 7, 6.5, 6), True)
+    page.rect("icon", x, y, w, h, fill=PILL_BLUE if solid else PILL_LIGHT_FILL, line=None if solid else PILL_LIGHT_LINE, lw=0.75,
+              rounding=h / 2, text=text, size=size, bold=True, color="#FFFFFF" if solid else PILL_LIGHT_TEXT, key=key)
+
+
 def draw_shape(page, s):
     x, y, w, h = rect_of(s)
     warn = None
@@ -226,50 +465,68 @@ def draw_shape(page, s):
         if s["label"]:
             size, warn = label_size(s, w - 0.1, 0.25, (9, 8, 7, 6.5, 6), True)
             page.text(x + 0.05, y + h - 0.28, w - 0.1, 0.25, s["label"], size=size, bold=True, halign=0, valign=0)
+    elif s["kind"] == "group":                                      # dashed rounded container with a blue title pill on its top edge
+        page.rect("zone", x, y, w, h, fill=s["fill"] or GROUP_FILL, line=GROUP_LINE, lw=1.0, pattern=2, rounding=0.12, key=s["key"])
+        if s["label"]:
+            pw = min(w - 0.3, max(1.6, 0.085 * len(s["label"]) + 0.6))
+            pill(page, x + (w - pw) / 2, y + h - 0.13, pw, 0.26, s["label"], True, s["key"] + ":title")
+    elif s["kind"] == "pill":
+        pill(page, x, y, w, h, s["label"], False, s["key"])
     elif s["kind"] == "text":
         size, warn = label_size(s, w, h, BOX_SIZES, s["bold"])
         page.text(x, y, w, h, s["label"], size=size, bold=s["bold"], key=s["key"])
-    elif s["pic"] and h > 0.4:
-        draw_picture(page, s["pic"], s["label"], x, y, w, h, s["key"], soft=True)
-    else:
-        size, warn = label_size(s, w, h, BOX_SIZES)
-        page.rect("icon", x, y, w, h, fill=s["fill"] or BOX_FILL, line=BOX_LINE, lw=0.75, pattern=2 if s["dashed"] else 1,
-                  text=s["label"], size=size, bold=s["bold"], key=s["key"])
+    else:                                                           # a device: its picture with the caption underneath, never a box
+        if s.get("scope"):                                          # scope colour as a rounded tile behind the picture and caption
+            page.rect("zone", x, y, w, h, fill=s["fill"], line=s["line"], lw=1.0, rounding=0.08, key=s["key"] + ":scope")
+        try:
+            fit_size(s["label"], w, LABEL_ZONE, LABEL_SIZES, True)
+        except TextFitError:
+            warn = "%s: label may not fit under its picture; shorten it or widen the shape (w)" % s["where"]
+        draw_picture(page, s["pic"], s["label"], x, y, w, h, s["key"], soft=True, sub=s.get("sub"), bold=True)
     return warn
 
 
 def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     comps, cables = comps or Components(), cables or Cables()
     shapes, lines, warnings = prepare(spec, comps, cables, spec_dir)
+    panels = apply_layers(spec, shapes, warnings)
     by_id = {s["id"]: s for s in shapes}
     page = Page()
     notes = [str(n) for n in spec.get("notes", [])]
     n_web = sum(1 for s in shapes if s["web"])
     if n_web:
         notes.append("%d picture(s) come from outside the component library; the source is in the shape data." % n_web)
-    missing = [k for k in footer.REQUIRED if not str(spec.get("project", {}).get(k, "")).strip()]
+    given = dict(spec.get("project", {}))
+    if "contractor" in given and "client" not in given:        # older files: Contractor is now Client
+        given["client"] = given["contractor"]
+    missing = [k for k in footer.REQUIRED if not str(given.get(k, "")).strip()]
     if missing:
         warnings.append("footer values printing TBC: %s; if the engineer or the documents gave any of them, add them to \"project\"" % ", ".join(missing))
-    used = sorted({c["cable"] for c in lines})
+    rings = prepare_rings(spec, shapes, cables)
+    used = sorted({c["cable"] for c in lines} | {r["cable"] for r in rings})
     try:
         footer.build_footer(page, spec.get("project", {}), cables.legend(used), notes, allow_tbc=True)
     except footer.FooterError as e:
         raise BuildError("footer: %s" % e)
 
-    for s in (s for s in shapes if s["kind"] == "zone"):                  # zones behind, then lines, then everything else on top
+    for p in panels:                                                      # layer panels at the very back
+        draw_layer(page, p)
+    for s in (s for s in shapes if s["kind"] in BEHIND):                  # zones and groups behind, then lines, then everything else on top
         w = draw_shape(page, s)
         if w:
             warnings.append(w)
+    placed = draw_rings(page, rings, by_id, cables, shapes, warnings)      # ring ellipses sit behind the lines and shapes
     n_lines = 0
     for c in lines:
         pts = route(rect_of(by_id[c["a"]]), rect_of(by_id[c["b"]]), c["via"])
         color, pattern = cables.line_style(c["cable"])
-        page.line(pts, color, pattern, lw=1.25, key="%s->%s" % (c["a"], c["b"]))
+        page.line(pts, color, pattern, lw=CABLE_LW, key="%s->%s" % (c["a"], c["b"]))
         n_lines += 1
         for s in shapes:
-            if s["kind"] != "zone" and s["id"] not in (c["a"], c["b"]) and crosses(pts, rect_of(s)):
+            if s["kind"] not in SEE_THROUGH and s["id"] not in (c["a"], c["b"]) and crosses(pts, rect_of(s)):
                 warnings.append("%s (%s to %s) passes through shape %r; add a \"via\" point to route round it" % (c["where"], c["a"], c["b"], s["id"]))
-    for s in (s for s in shapes if s["kind"] != "zone"):
+    n_lines += draw_ring_links(page, placed, by_id, cables, shapes, warnings)
+    for s in (s for s in shapes if s["kind"] not in BEHIND):
         w = draw_shape(page, s)
         if w:
             warnings.append(w)

@@ -14,10 +14,10 @@ Analogy: the AI is a draughtsman. The instruction is the job brief; the program 
 | Fixed (same for everyone) | Free (the AI decides) |
 |---|---|
 | The A3 footer: title block, notes, legend, Avanceon logo | What is in the diagram and how it is laid out |
-| Cable types and colours: ethernet blue, fibre red, modbus green, bacnet purple, hardwired black | Whether to ask questions, what to add, which pictures to use |
+| Cable types and colours: hardwired instrument/control black solid, ethernet blue dashed, modbus red solid, fiber optic green dashed, bacnet purple solid | Whether to ask questions, what to add, which pictures to use |
 | Output is one editable A3 `.vsdx` made by the program | Pictures: web, library, or none |
 
-The footer values (End User, Contractor, Project, Documentation Name, Prepared by, Checked by, Approved by, Rev) come from the user's prompt; missing ones print `TBC`.
+The footer values (End User, Client, Project, Document Name, Prepared by, Checked by, Approved by, Revision, Sheet) come from the user's prompt; missing ones print `TBC`.
 
 ## How a user uses it
 1. Write a normal prompt (optionally attach an RFQ or BOQ). Say the project name and any footer details in the prompt.
@@ -73,7 +73,7 @@ Typical changes: a new cable colour or type (`data/cable_types.json`), a new lib
 - **Picture licensing.** Web pictures (supplier photos, SAP/QGIS/Wazuh logos, stock icons) may be copyrighted. RPS should decide the policy before diagrams go to clients. Sources are stored in each picture shape's data and noted in the footer.
 - **Layout is not checked for neatness.** The program warns about overlaps and lines through shapes but does not fix them. An optional "tidy" layout mode was discussed, not built.
 - **Extra items.** The AI may add equipment the user did not ask for (switches, WAN routers). That is allowed by design; reviewers should check the diagram against the request.
-- **Library is partial.** Only about 37 components have pictures; field transmitters, SIEM, SAP, GIS, etc. rely on web pictures.
+- **Library is partial.** Only about 37 components have pictures; field transmitters, SIEM, SAP, GIS, etc. rely on web pictures. Instruments, third-party items and VM boxes also get pictures (D43). Web pictures are cleaned (transparent background) by `scripts/pictures.py`; without Pillow it uses a standard-library PNG route that handles 8-bit non-interlaced PNGs, otherwise the picture is used as it is.
 - **Acceptance testing is thin.** It has been tried on one prompt (42 pumping stations, Purdue model). Try at least three real RPS prompts, with a reviewer comparing each result.
 - **The old sign-off document is out of date** (it describes the earlier strict approach).
 - **The ChatGPT custom GPT is not set up yet.** RPS must confirm their plan allows custom GPTs and Code Interpreter.

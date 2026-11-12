@@ -48,9 +48,23 @@ def render(page, path):
                     d.line([p, q], fill=s["line"], width=max(1, int(s["lw"] * 1.3)))
         else:
             box = [X(s["x"]), Y(s["y"] + s["h"]), X(s["x"] + s["w"]), Y(s["y"])]
-            if s["fill"] or s["line"]:
+            if s["kind"] == "poly":
+                d.polygon([(X(px), Y(py)) for px, py in s["pts"]], fill=s["fill"], outline=s["line"])
+                continue
+            if s["kind"] == "rect" and s.get("rounding") and (s["fill"] or s["line"]):
+                d.rounded_rectangle(box, radius=s["rounding"] * DPI, fill=s["fill"], outline=s["line"], width=1)
+            elif s["kind"] == "ellipse":
+                d.ellipse(box, fill=s["fill"], outline=s["line"], width=1)
+            elif s["fill"] or s["line"]:
                 d.rectangle(box, fill=s["fill"], outline=s["line"], width=1)
-            if s["text"]:
+            if s["text"] and s.get("text_angle"):                       # rotated text (layer names)
+                f = _font(s["size"])
+                w_ = int(d.textlength(s["text"], font=f)) + 4
+                tile = Image.new("RGBA", (w_, int(f.size * 1.6)), (0, 0, 0, 0))
+                ImageDraw.Draw(tile).text((2, 1), s["text"], fill="white", font=f)
+                tile = tile.rotate(s["text_angle"], expand=True)
+                im.paste(tile, (int((box[0] + box[2] - tile.width) / 2), int((box[1] + box[3] - tile.height) / 2)), tile)
+            elif s["text"]:
                 f = _font(s["size"])
                 lines = _wrap(d, s["text"], f, box[2] - box[0] - 4)
                 lh = f.size * 1.15
@@ -58,6 +72,6 @@ def render(page, path):
                 for ln in lines:
                     w = d.textlength(ln, font=f)
                     x = box[0] + 2 if s["halign"] == 0 else (box[2] - w - 2 if s["halign"] == 2 else (box[0] + box[2] - w) / 2)
-                    d.text((x, y), ln, fill="black", font=f)
+                    d.text((x, y), ln, fill=s.get("color", "#000000"), font=f)
                     y += lh
     im.save(path)

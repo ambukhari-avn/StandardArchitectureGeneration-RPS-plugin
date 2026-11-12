@@ -1,14 +1,15 @@
 {
   "title": "Footer details",
   "fields": [
-    {"key": "end_user",    "label": "End User",           "required": true},
-    {"key": "contractor",  "label": "Contractor",         "required": true},
-    {"key": "project",     "label": "Project",            "required": true},
-    {"key": "doc_name",    "label": "Documentation Name", "required": false, "default": "Architecture"},
-    {"key": "prepared_by", "label": "Prepared by",        "required": true},
-    {"key": "checked_by",  "label": "Checked by",         "required": true},
-    {"key": "approved_by", "label": "Approved by",        "required": true},
-    {"key": "rev",         "label": "Rev/Sheet",          "required": false, "default": "R0/1"}
+    {"key": "end_user",    "label": "End User",      "required": true},
+    {"key": "client",      "label": "Client",        "required": true},
+    {"key": "project",     "label": "Project",       "required": true},
+    {"key": "doc_name",    "label": "Document Name", "required": false, "default": "Architecture"},
+    {"key": "prepared_by", "label": "Prepared by",   "required": true},
+    {"key": "checked_by",  "label": "Checked by",    "required": true},
+    {"key": "approved_by", "label": "Approved by",   "required": true},
+    {"key": "revision",    "label": "Revision",      "required": false, "default": "R0"},
+    {"key": "sheet",       "label": "Sheet",         "required": false, "default": "1"}
   ],
   "notes_label": "Notes"
 }

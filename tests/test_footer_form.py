@@ -10,13 +10,14 @@ import footer_form as ff
 from vsdx_writer import Page
 
 FILLED = """End User: King Saud University
-Contractor: CRCC
+Client: CRCC
 Project: KSU Utilities and Facilities Relocation Project
-Documentation Name: Architecture
+Document Name: Architecture
 Prepared by: IH
 Checked by: SA
 Approved by: AP
-Rev/Sheet: R0/1
+Revision: R0
+Sheet: 1
 Notes:
 1. Two ASPs are considered for each existing building.
 Redundant networking: considered for each building.
@@ -29,13 +30,14 @@ class FormTests(unittest.TestCase):
         fields, notes_label = ff.load_template()
         for f in fields:
             self.assertIn(f["label"] + ":", text)
-        self.assertIn("Documentation Name: Architecture", text)
-        self.assertIn("Rev/Sheet: R0/1", text)
+        self.assertIn("Document Name: Architecture", text)
+        self.assertIn("Revision: R0", text)
+        self.assertIn("Sheet: 1", text)
         self.assertIn(notes_label + ":", text)
 
     def test_blank_form_parses_to_defaults_only(self):
         fields, notes = ff.parse_form(ff.blank_form_text())
-        self.assertEqual(fields, {"doc_name": "Architecture", "rev": "R0/1"})
+        self.assertEqual(fields, {"doc_name": "Architecture", "revision": "R0", "sheet": "1"})
         self.assertEqual(notes, [])
 
     def test_filled_text_form(self):
@@ -56,8 +58,8 @@ class FormTests(unittest.TestCase):
         self.assertTrue(any(t.startswith("1. Two ASPs") and "\n2. Redundant networking" in t for t in texts))
 
     def test_label_matching_ignores_case_and_spacing(self):
-        fields, _ = ff.parse_form("end user :  A\nCONTRACTOR: B")
-        self.assertEqual(fields, {"end_user": "A", "contractor": "B"})
+        fields, _ = ff.parse_form("end user :  A\nCLIENT: B")
+        self.assertEqual(fields, {"end_user": "A", "client": "B"})
 
     def test_unknown_label_or_stray_line_is_rejected(self):
         with self.assertRaises(ff.FormError):

@@ -23,12 +23,15 @@ class CableTests(unittest.TestCase):
     def test_client_colour_standard(self):
         self.assertEqual(self.c.status, "client")
         self.assertEqual({i: c["color"] for i, c in self.c.by_id.items()},
-                         {"ethernet": "#0000FF", "fibre": "#FF0000", "modbus": "#00B000", "bacnet": "#7030A0", "hardwired": "#000000"})
-        self.assertEqual(self.c.line_style("fibre"), ("#FF0000", 1))
+                         {"ethernet": "#0000FF", "fibre": "#00B000", "modbus": "#FF0000", "bacnet": "#7030A0", "hardwired": "#000000"})
+        self.assertEqual({i: c["pattern"] for i, c in self.c.by_id.items()},
+                         {"ethernet": 2, "fibre": 2, "modbus": 1, "bacnet": 1, "hardwired": 1})   # dashed: ethernet, fibre optic
+        self.assertEqual(self.c.line_style("fibre"), ("#00B000", 2))
+        self.assertEqual(self.c.line_style("ethernet"), ("#0000FF", 2))
 
     def test_legend_has_only_used_cables_in_table_order(self):
         leg = self.c.legend(["fibre", "ethernet"])
-        self.assertEqual([e["label"] for e in leg], ["Ethernet (Cu)", "Fibre"])
+        self.assertEqual([e["label"] for e in leg], ["Ethernet", "Fiber optic"])
         self.assertTrue(all(e["kind"] == "line" and e["color"].startswith("#") for e in leg))
 
     def test_unknown_cable_is_an_error(self):
@@ -51,7 +54,7 @@ class CableTests(unittest.TestCase):
         import footer
         from vsdx_writer import Page
         pg = Page()
-        footer.build_footer(pg, dict(end_user="a", contractor="b", project="c", prepared_by="d", checked_by="e", approved_by="f"),
+        footer.build_footer(pg, dict(end_user="a", client="b", project="c", prepared_by="d", checked_by="e", approved_by="f"),
                             self.c.legend(["ethernet", "fibre", "hardwired"]))
         lines = [s for s in pg.shapes if s["role"] == "line"]
         self.assertEqual(sorted(s["line"] for s in lines), sorted(self.c.by_id[i]["color"] for i in ("ethernet", "fibre", "hardwired")))
