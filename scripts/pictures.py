@@ -17,7 +17,8 @@ import tempfile
 import zlib
 from collections import deque
 
-MAX_SIDE = 700
+MAX_SIDE = 2400           # retain detail for A3 printing; never upscale a small source
+CACHE_VERSION = "reference-quality-v2"
 TOL = 30                  # per-channel distance from the border colour that still counts as background
 HALO = 70                 # looser distance for the pixels touching the cut
 PAD = 2
@@ -107,24 +108,34 @@ def _near(p, bg, tol):
 def _clean(w, h, px):
     """(w, h, px) cleaned, or None if nothing sensible would be left."""
     corners = [px[0][0], px[0][w - 1], px[h - 1][0], px[h - 1][w - 1]]
-    if sum(1 for c in corners if c[3] < 16) >= 3:                   # already has a transparent background
+    if any(p[3] < 255 for row in px for p in row):                # preserve supplied alpha, including antialiased edges
         out = px
     else:
+        inset = min(2, (w - 1) // 2, (h - 1) // 2)
+        inner = [px[inset][inset], px[inset][w - 1 - inset], px[h - 1 - inset][inset], px[h - 1 - inset][w - 1 - inset]]
+        # Ignore a thin grey product-photo frame when the inset is consistently
+        # lighter. Only edge seeds use the looser tolerance; interiors do not.
+        if all(min(c[:3]) >= 230 for c in inner) and all(_near(c, inner[0], TOL) for c in inner):
+            corners = inner
         opaque = [c for c in corners if c[3] >= 16]
         bg = tuple(sorted(c[i] for c in opaque)[len(opaque) // 2] for i in range(3))
         out = [list(r) for r in px]
+        def background_pixel(p):
+            # A neutral soft shadow is still backdrop when connected to an edge.
+            # Coloured equipment and enclosed white product details stay intact.
+            return _near(p, bg, TOL) or (min(bg) >= 230 and max(p[:3]) - min(p[:3]) <= 12 and _near(p, bg, 100))
         seen = [bytearray(w) for _ in range(h)]
         q = deque()
         edge = [(x, 0) for x in range(w)] + [(x, h - 1) for x in range(w)] + [(0, y) for y in range(h)] + [(w - 1, y) for y in range(h)]
         for x, y in edge:
-            if not seen[y][x] and _near(px[y][x], bg, TOL):
+            if not seen[y][x] and _near(px[y][x], bg, HALO):
                 seen[y][x] = 1
                 q.append((x, y))
         while q:
             x, y = q.popleft()
             out[y][x] = (px[y][x][0], px[y][x][1], px[y][x][2], 0)
             for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-                if 0 <= nx < w and 0 <= ny < h and not seen[ny][nx] and _near(px[ny][nx], bg, TOL):
+                if 0 <= nx < w and 0 <= ny < h and not seen[ny][nx] and background_pixel(px[ny][nx]):
                     seen[ny][nx] = 1
                     q.append((nx, ny))
         halo = []                                                   # one-pixel fringe of near-background colour along the cut
@@ -154,30 +165,61 @@ def _shrink(w, h, px):
     return nw, nh, [[px[int(y / f)][int(x / f)] for x in range(nw)] for y in range(nh)]
 
 
-def prepare(path):
+def prepare(path, background="auto"):
     """(path of the cleaned PNG, note). Never raises: on any problem the original path comes back with a note."""
     try:
+        if background not in ("auto", "keep"):
+            raise ValueError('background must be "auto" or "keep"')
         st = os.stat(path)
-        key = hashlib.sha1(("%s|%s|%s" % (os.path.abspath(path), st.st_mtime_ns, st.st_size)).encode()).hexdigest()[:16]
+        key = hashlib.sha1(("%s|%s|%s|%s|%s|%s" % (CACHE_VERSION, MAX_SIDE, background, os.path.abspath(path), st.st_mtime_ns, st.st_size)).encode()).hexdigest()[:16]
         out = os.path.join(_CACHE_DIR, key + ".png")
         if os.path.exists(out):
             return out, None
         os.makedirs(_CACHE_DIR, exist_ok=True)
         try:
-            from PIL import Image
-            im = Image.open(path).convert("RGBA")
-            if max(im.size) > MAX_SIDE * 2:                         # keep the pure-Python flood fill quick on huge pictures
-                im.thumbnail((MAX_SIDE * 2, MAX_SIDE * 2))
+            from PIL import Image, ImageOps
+            with Image.open(path) as source:
+                im = ImageOps.exif_transpose(source).convert("RGBA")
+            # Transparent originals need no segmentation. Crop at native resolution
+            # before applying the cap, so small devices on a large canvas stay sharp.
+            if im.getchannel("A").getextrema()[0] < 255 or background == "keep":
+                bbox = im.getchannel("A").getbbox()
+                if bbox:
+                    bbox = (max(0, bbox[0] - PAD), max(0, bbox[1] - PAD), min(im.width, bbox[2] + PAD), min(im.height, bbox[3] + PAD))
+                    im = im.crop(bbox)
+                im.thumbnail((MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
+                im.save(out, dpi=(300, 300))
+                return out, None
+            im.thumbnail((MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
             w, h = im.size
             data = list(im.getdata())
             px = [data[y * w:(y + 1) * w] for y in range(h)]
         except ImportError:
             w, h, px = _read_png(path)
+        if background == "keep":
+            _write_png(out, w, h, px)
+            return out, None
+        corners = [px[0][0], px[0][-1], px[-1][0], px[-1][-1]]
+        if not any(p[3] < 255 for row in px for p in row):
+            # Automatic removal is safe only for a consistent light studio backdrop.
+            # Complex scenes and dark equipment at the image edges need a better source.
+            light = all(min(c[:3]) >= 190 and max(c[:3]) - min(c[:3]) <= 30 for c in corners)
+            consistent = all(_near(c, corners[0], TOL) for c in corners)
+            if not light or not consistent:
+                return path, "background is not a uniform light backdrop; use a transparent product picture or background=keep; the picture is used as it is"
         res = _clean(w, h, px)
         if res is None:
             return path, "background could not be removed (almost nothing is left); the picture is used as it is"
-        w, h, px = _shrink(*res)
-        _write_png(out, w, h, px)
+        w, h, px = res
+        try:
+            from PIL import Image
+            cleaned = Image.new("RGBA", (w, h))
+            cleaned.putdata([p for row in px for p in row])
+            cleaned.thumbnail((MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
+            cleaned.save(out, dpi=(300, 300))
+        except ImportError:
+            w, h, px = _shrink(w, h, px)
+            _write_png(out, w, h, px)
         return out, None
     except Exception as e:                                          # an unreadable picture must not stop the build
         return path, "background not removed (%s); the picture is used as it is" % e

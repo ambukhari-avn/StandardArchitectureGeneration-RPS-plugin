@@ -38,7 +38,7 @@ BEHIND = ("zone", "group")                              # drawn first, behind th
 SEE_THROUGH = ("zone", "group", "pill")                 # lines may run over these; they are not obstacles
 GROUP_FILL, GROUP_LINE, PILL_BLUE = "#FFFFFF", "#1F4E9E", "#1456C0"
 PILL_LIGHT_FILL, PILL_LIGHT_LINE, PILL_LIGHT_TEXT = "#D9E9FB", "#2F6FD0", "#0B3C8C"
-CABLE_LW = 1.25
+CABLE_LW = 1.75                                         # bold reference-style cables, in points
 BLUE = "#1F4E9E"                                         # the blue of the frame, titles, layer names and group boxes
 ZONE_FILL, ZONE_LINE = "#F7F9FC", "#9AA5B1"
 HEX = re.compile(r"#[0-9A-Fa-f]{6}$")
@@ -115,7 +115,11 @@ def prepare(spec, comps, cables, spec_dir):
             except (OSError, ValueError) as e:
                 warnings.append("%s: picture not usable (%s); drawn as a box" % (where, e))
         if pic and kind == "box":                                       # transparent background, trimmed, not oversized
-            pic, note = pictures.prepare(pic)
+            background = s.get("background", "auto")
+            if background not in ("auto", "keep"):
+                errors.append('%s: background must be "auto" or "keep"' % where)
+                continue
+            pic, note = pictures.prepare(pic, background=background)
             if note:
                 warnings.append("%s: %s" % (where, note))
         elif kind == "box":                                             # no picture given: a generic device icon, never a plain box
@@ -267,7 +271,7 @@ def draw_layer(page, p):
     """One layer: a white row between thin blue lines, with the label column on the left: LEVEL n and the name in big blue bold, the
     description under it in small black."""
     x, y, w, h = MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]
-    page.rect("zone", x, y, w, h, fill=PANEL_FILL, line=PANEL_LINE, lw=1.0, key="layer:" + p["id"])
+    page.rect("zone", x, y, w, h, fill=PANEL_FILL, line=PANEL_LINE, lw=1.5, key="layer:" + p["id"])
     head = "%s\n%s" % (p["level"].upper(), p["name"].upper())
     size = fit_size(max(head.split("\n"), key=len), BAND_W - 0.3, 0.3, (16, 14, 13, 12, 11, 10, 9), True)
     cy = y + h / 2
@@ -375,7 +379,7 @@ def draw_rings(page, rings, by_id, cables, shapes, warnings):
         color, pattern = cables.line_style(r["cable"])
         label = r["label"]
         size = fit_size(label, ew * 0.7, eh * 0.6, (10, 9, 8, 7, 6.5, 6), True) if label else 8
-        page.ellipse("ring", ex, ey, ew, eh, fill=RING_FILL, line=color, lw=1.5, pattern=2, text=label, size=size, bold=True,
+        page.ellipse("ring", ex, ey, ew, eh, fill=RING_FILL, line=color, lw=CABLE_LW, pattern=2, text=label, size=size, bold=True,
                      key="ring:%s" % r["id"])
         out.append((r, (ex, ey, ew, eh)))
     return out
@@ -397,7 +401,7 @@ def draw_ring_links(page, placed, by_id, cables, shapes, warnings):
                 warnings.append("%s: node %r lies beyond the end of the ring ellipse; widen the ring (x, w) or move the node" % (r["where"], v))
             ye = ecy + (1 if above else -1) * b * math.sqrt(1 - dx * dx)
             pts = [(px, ny if above else ny + nh), (px, ye)]
-            page.line(pts, color, pattern, lw=1.25, key="ring:%s:%s" % (r["id"], v))
+            page.line(pts, color, pattern, lw=CABLE_LW, key="ring:%s:%s" % (r["id"], v))
             n += 1
             for s in shapes:
                 if s["kind"] not in SEE_THROUGH and s["id"] != v and crosses(pts, rect_of(s)):
@@ -498,7 +502,7 @@ def draw_shape(page, s):
             size, warn = label_size(s, w - 0.1, 0.25, (9, 8, 7, 6.5, 6), True)
             page.text(x + 0.05, y + h - 0.28, w - 0.1, 0.25, s["label"], size=size, bold=True, halign=0, valign=0)
     elif s["kind"] == "group":                                      # dashed rounded blue box with its title in blue bold at the top
-        page.rect("zone", x, y, w, h, fill=s["fill"] or GROUP_FILL, line=GROUP_LINE, lw=1.0, pattern=2, rounding=0.12, key=s["key"])
+        page.rect("zone", x, y, w, h, fill=s["fill"] or GROUP_FILL, line=GROUP_LINE, lw=1.5, pattern=2, rounding=0.12, key=s["key"])
         if s["label"]:
             size, warn = label_size(s, w - 0.3, 0.25, (11, 10, 9, 8, 7, 6.5), True)
             page.text(x + 0.1, y + h - 0.32, w - 0.2, 0.28, s["label"], size=size, bold=True, color=BLUE, valign=0, key=s["key"] + ":title")
@@ -512,7 +516,14 @@ def draw_shape(page, s):
             fit_size(s["label"], w, LABEL_ZONE, LABEL_SIZES, True)
         except TextFitError:
             warn = "%s: label may not fit under its picture; shorten it or widen the shape (w)" % s["where"]
+        first = len(page.shapes)
         draw_picture(page, s["pic"], s["label"], x, y, w, h, s["key"], soft=True, sub=s.get("sub"), bold=True)
+        image = page.shapes[first]
+        iw, ih = png_size(s["pic"])
+        dpi = min(iw / image["w"], ih / image["h"])
+        if s["web"] and dpi < 150:
+            quality = "%s: picture has only %.0f pixels per displayed inch; obtain a higher-resolution original (300 recommended)" % (s["where"], dpi)
+            warn = (warn + "; " + quality) if warn else quality
     return warn
 
 

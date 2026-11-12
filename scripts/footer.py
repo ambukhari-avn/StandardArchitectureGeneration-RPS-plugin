@@ -162,7 +162,7 @@ def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO
         label = _clean(e["label"])
         size = _fit(label, colw - 0.65, LEGEND_ROW_H - 0.02, (7, 6.5, 6), what="legend entry")
         if e.get("kind", "line") == "line":
-            page.line([(x, y + LEGEND_ROW_H / 2), (x + 0.45, y + LEGEND_ROW_H / 2)], e["color"], e.get("pattern", 1), 1.0, lg,
+            page.line([(x, y + LEGEND_ROW_H / 2), (x + 0.45, y + LEGEND_ROW_H / 2)], e["color"], e.get("pattern", 1), 1.75, lg,
                       key="legend:" + label)
         else:
             page.rect("icon", x, y + 0.03, 0.45, LEGEND_ROW_H - 0.06, lg, fill=e["color"], line="#404040", lw=0.5, key="legend:" + label)

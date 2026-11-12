@@ -1,0 +1,23 @@
+{
+  "title": "PLC & SCADA SYSTEM ARCHITECTURE (PURDUE MODEL - 3 LAYERS)",
+  "project": {"end_user": "TBC", "client": "TBC", "project": "Reference styling example", "doc_name": "PLC & SCADA System Architecture", "revision": "R0", "sheet": "1"},
+  "notes": ["Style verification example; equipment and connections are illustrative."],
+  "layers": ["scada", "control", "field"],
+  "shapes": [
+    {"id": "ows", "label": "SCADA Workstation", "component": "client_operator_workstation", "layer": "scada", "scope": "avanceon"},
+    {"id": "server", "label": "SCADA Server", "sublabel": "(Primary)", "component": "rack_server", "layer": "scada", "scope": "avanceon"},
+    {"id": "sw", "label": "SCADA Switch", "component": "industrial_switch", "layer": "scada", "scope": "avanceon"},
+    {"id": "plc", "label": "Primary Controller", "component": "rack_plc", "layer": "control", "scope": "avanceon"},
+    {"id": "rio", "label": "Remote I/O", "component": "remote_i_o_drop", "layer": "control", "scope": "avanceon"},
+    {"id": "pressure", "label": "Pressure Transmitter", "image": "pictures/pressure_transmitter.png", "image_source": "Bundled test fixture", "layer": "field", "scope": "other"},
+    {"id": "flow", "label": "Flow Transmitter", "image": "pictures/flow_transmitter.png", "image_source": "Bundled test fixture", "layer": "field", "scope": "other"}
+  ],
+  "lines": [
+    {"from": "ows", "to": "sw", "cable": "ethernet"},
+    {"from": "server", "to": "sw", "cable": "ethernet"},
+    {"from": "sw", "to": "plc", "cable": "ethernet"},
+    {"from": "plc", "to": "rio", "cable": "fibre"},
+    {"from": "pressure", "to": "rio", "cable": "hardwired"},
+    {"from": "flow", "to": "rio", "cable": "hardwired"}
+  ]
+}

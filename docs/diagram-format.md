@@ -30,6 +30,7 @@ Size is always A3. A value too long for its footer cell stops the build.
 | `w`, `h` | size; defaults: device 1.35 x 1.25, text 1.5 x 0.3, pill sized to its text; zones and groups must give them |
 | `component` | id from `data/components.json`: the library picture (a box if it has none) |
 | `image`, `image_source` | path to a picture (PNG; WebP, JPEG or GIF are converted if Pillow is installed) and where it came from; the footer notes it |
+| `background` | `auto` (default): remove a uniform light backdrop, preserve existing alpha and trim. `keep`: preserve the source background. Complex/dark backgrounds in auto mode are retained with a warning; obtain a transparent product original instead. |
 | `dashed`, `fill`, `bold`, `size` | optional look: dashed outline, `#RRGGBB` fill, bold text, font size in pt (never below 6) |
 | `layer` | optional standard layer id (see layers); `x` becomes optional and `y` is ignored |
 | `scope` | optional `avanceon` or `other`: fills a box or zone with the matching footer scope colour (an explicit `fill` wins; pictures are not coloured) |
@@ -90,6 +91,8 @@ Manual instructions always win, per cable: `"from_side"` / `"to_side"` (`left`, 
 
 
 ## Look and feel (reference style)
+- Match `docs/reference-style.png` for visual treatment, using the current project's equipment and topology. Cables and ring links are 1.75 pt, panel/layer boundaries 1.5 pt, outer border 2.25 pt. Preview rendering uses 200 dpi, bold fonts, proportional strokes, dashed containers and Lanczos picture resampling.
+- Picture cleanup keeps up to 2400 pixels, preserves existing alpha and device interior whites, and never upscales small pictures. Choose sharp manufacturer originals at 300 source pixels per displayed inch. Background removal is for uniform light product backdrops, not arbitrary scenes. Use `--preview` and inspect the image before delivery.
 - A blue frame surrounds the sheet; a bold blue **title** (`"title"` in the file, default the Document Name) sits in a strip above the layers.
 - Layers are white rows separated by thin blue lines. The left column of each row shows `LEVEL n` and the layer name in big blue bold, with a short description in black (from `data/layers.json`). Layers touch and fill the whole drawing area.
 - Scope is **not** coloured inside the layers; it appears only in the footer scope boxes (Avanceon grey, Client pink). Shapes may still carry `"scope"`; Avanceon shapes are placed first in a row.
