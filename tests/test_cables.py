@@ -56,7 +56,7 @@ class CableTests(unittest.TestCase):
         pg = Page()
         footer.build_footer(pg, dict(end_user="a", client="b", project="c", prepared_by="d", checked_by="e", approved_by="f"),
                             self.c.legend(["ethernet", "fibre", "hardwired"]))
-        lines = [s for s in pg.shapes if s["role"] == "line"]
+        lines = [s for s in pg.shapes if (s["key"] or "").startswith("legend:") and s["role"] == "line"]
         self.assertEqual(sorted(s["line"] for s in lines), sorted(self.c.by_id[i]["color"] for i in ("ethernet", "fibre", "hardwired")))
 
 

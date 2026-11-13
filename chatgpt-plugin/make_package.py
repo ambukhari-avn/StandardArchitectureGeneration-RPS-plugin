@@ -12,8 +12,9 @@ import sys
 import zipfile
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-KEEP = ("scripts", "data", "base", "samples", os.path.join("docs", "diagram-format.md"))
-SKIP = ("__pycache__", ".pyc", "dev_preview.py", "import_dataset.py", "xlsx_reader.py")                  # development aids, not needed to draw
+KEEP = ("scripts", "data", "base", "samples", os.path.join("docs", "diagram-format.md"),
+        os.path.join("docs", "reference-layout.md"), os.path.join("docs", "reference-style.png"), os.path.join("docs", "reference-dashes.png"))
+SKIP = ("__pycache__", ".pyc", "import_dataset.py", "xlsx_reader.py")
 
 
 def files():

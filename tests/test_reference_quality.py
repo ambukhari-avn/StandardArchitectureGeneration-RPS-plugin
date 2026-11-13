@@ -63,7 +63,7 @@ class ReferenceQualityTests(unittest.TestCase):
                 self.assertEqual(shape["line"], footer.BLUE)
                 if shape["text"]:
                     self.assertTrue(shape["bold"])
-        for label in ("Notes:", "Legend", "Avanceon Scope", "Client Scope", "Ethernet"):
+        for label in ("Notes", "Legend", "Project Name", "Document Name", "Prepared by", "Checked by", "Approved by"):
             self.assertTrue(next(s for s in page.shapes if s["text"] == label)["bold"])
 
     def save(self, im):

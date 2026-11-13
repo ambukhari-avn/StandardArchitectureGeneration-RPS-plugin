@@ -24,6 +24,7 @@ def spec(**kw):
 
 def build(s):
     d = tempfile.mkdtemp()
+    s = {"layout_style": "legacy", **s}  # regression coverage for existing explicit layouts
     return B.build(s, BASE, os.path.join(d, "o.vsdx"), spec_dir=d)
 
 

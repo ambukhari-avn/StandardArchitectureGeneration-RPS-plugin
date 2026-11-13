@@ -1,6 +1,7 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
 Turns an engineer's prompt (optionally with an RFQ or BOQ attached) into an editable one-page A3 Visio `.vsdx`.
+Version 1.1.0 uses the latest [boxed reference layout](docs/reference-layout.md): rounded light-blue heading cards, content-sized layers with a larger PLC/control area, nested equipment groups, optional requested side panels, shared instrument-to-I/O wiring and a three-card footer. The existing cable colours are unchanged. Try `python scripts/build_diagram.py samples/reference_boxed.json --out out/Architecture.vsdx --preview`. Older layouts remain available with `layout_style: "legacy"`.
 ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. Only two things are fixed, so they are the same for
 every diagram the team makes: the **footer** (title block, notes, legend) and the **cable colours** (from the client's drawing
 instructions). Everything else is free-form (decision D43).
@@ -26,7 +27,7 @@ python -m unittest discover -s tests
 python scripts/build_diagram.py samples/diagram_example.json --out Architecture_test.vsdx
 ```
 `main` is the released version (Claude installs from it); day-to-day work happens on `development` or a feature branch. The tests should
-pass (57, 2 skipped) and the last command should print `built` and create a file that opens in Visio.
+pass and the last command should print `built` and create an editable Visio file.
 
 To make a change: `git checkout -b feature/<what-you-change>`, edit, run the tests, commit, push the branch, and open a pull request into
 `development`. Release steps (raise the version, `make_package.py`, merge to `main`) are in [docs/handover.md](docs/handover.md).

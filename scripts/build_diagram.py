@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import footer
 import pictures
 import router
+import reference_layout
 from cables import CableError, Cables
 from components import Components
 from draw import BOX_FILL, BOX_LINE, BOX_SIZES, LABEL_SIZES, LABEL_ZONE, draw_picture
@@ -36,10 +37,10 @@ MIN_DEVICE_H = 0.60                                     # a device cell shorter 
 GENERIC_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "icons", "generic_device.png")
 BEHIND = ("zone", "group")                              # drawn first, behind the lines and shapes
 SEE_THROUGH = ("zone", "group", "pill")                 # lines may run over these; they are not obstacles
-GROUP_FILL, GROUP_LINE, PILL_BLUE = "#FFFFFF", "#1F4E9E", "#1456C0"
+GROUP_FILL, GROUP_LINE, PILL_BLUE = "#FFFFFF", reference_layout.NAVY, "#1456C0"
 PILL_LIGHT_FILL, PILL_LIGHT_LINE, PILL_LIGHT_TEXT = "#D9E9FB", "#2F6FD0", "#0B3C8C"
 CABLE_LW = 1.75                                         # bold reference-style cables, in points
-BLUE = "#1F4E9E"                                         # the blue of the frame, titles, layer names and group boxes
+BLUE = reference_layout.NAVY
 ZONE_FILL, ZONE_LINE = "#F7F9FC", "#9AA5B1"
 HEX = re.compile(r"#[0-9A-Fa-f]{6}$")
 LAYERS_PATH = os.path.join(ROOT, "data", "layers.json")
@@ -127,20 +128,24 @@ def prepare(spec, comps, cables, spec_dir):
             warnings.append("%s: no picture (give \"component\" or \"image\"); a generic device icon is used" % where)
         x, y = _num(s.get("x")), _num(s.get("y"))
         layer = s.get("layer")
+        parent = s.get("parent")
+        reference = spec.get("layout_style", "reference") == "reference"
         auto_x = layer is not None and x is None
         if layer is not None:
-            if kind in BEHIND:
+            if kind in BEHIND and not (reference and kind == "group"):
                 errors.append("%s: a %s cannot be placed in a layer" % (where, kind))
                 continue
             x, y = (0.0 if x is None else x), 0.0                  # y is set by the layer (centred); x too unless given
+        if parent and reference:
+            x, y = 0.0, 0.0
         if x is None or y is None:
             errors.append("%s: x and y (inches from the top-left of the drawing area) are required" % where)
             continue
-        needs_size = kind in ("zone", "group")
+        needs_size = kind in ("zone", "group") and not (reference and kind == "group" and (layer or parent))
         if kind == "pill":
             dw, dh = min(4.0, 0.085 * len(label) + 0.6), 0.26
         else:
-            dw, dh = DEFAULT_SIZE["picture" if pic and kind == "box" else kind if not needs_size else "box"]
+            dw, dh = DEFAULT_SIZE["picture" if pic and kind == "box" else "box" if kind == "group" else kind if not needs_size else "box"]
         w, h = _num(s.get("w", None if needs_size else dw)), _num(s.get("h", None if needs_size else dh))
         if w is None or h is None or w <= 0 or h <= 0:
             errors.append("%s: w and h must be positive numbers%s" % (where, " (zones and groups need them)" if needs_size else ""))
@@ -167,7 +172,10 @@ def prepare(spec, comps, cables, spec_dir):
                 pass                                                    # scope is shown as a coloured block per layer (apply_layers), not on the shape
         shapes.append(dict(id=sid, kind=kind, label=label, pic=pic, web=web, key=key, x=cx, y=cy, w=w, h=h, fill=fill,
                            dashed=bool(s.get("dashed")), bold=bool(s.get("bold")), size=_num(s.get("size")), where=where,
-                           layer=layer, auto_x=auto_x, line=line, sub=sub, scope=scope if scope in footer.SCOPE else None))
+                           layer=layer, auto_x=auto_x, line=line, sub=sub, scope=scope if scope in footer.SCOPE else None,
+                           parent=str(parent) if parent else None, row=s.get("row"), columns=s.get("columns"),
+                           placement=s.get("placement"), width_weight=s.get("width_weight"), solid=bool(s.get("solid")),
+                           max_width=s.get("max_width"), max_height=s.get("max_height")))
     lines = []
     for n, c in enumerate(spec.get("lines", []), 1):
         where = "line %d" % n
@@ -199,7 +207,7 @@ def prepare(spec, comps, cables, spec_dir):
             elif v is not None:
                 sides[key] = v
         lines.append(dict(a=str(c.get("from")), b=str(c.get("to")), cable=c.get("cable"), via=via, where=where,
-                          straight=bool(c.get("straight")), **sides))
+                          straight=bool(c.get("straight")), individual=bool(c.get("individual")), **sides))
     if errors:
         raise BuildError("\n  ".join(["cannot draw this file:"] + errors))
     return shapes, lines, warnings
@@ -219,6 +227,11 @@ def apply_layers(spec, shapes, warnings):
     """Stack the requested layers in the standard order so together they fill the whole drawing area, and place the shapes tagged with
     a layer: spread evenly across the layer's width and centred in its height. Returns the panels [{id, label, x, y, w, h}]
     (inches from the top-left of the drawing area). No "layers" in the file: nothing happens and shapes stay where they were put."""
+    style = spec.get("layout_style", "reference")
+    if style not in ("reference", "legacy"):
+        raise BuildError('layout_style must be "reference" or "legacy"')
+    if style == "reference":
+        return reference_layout.apply_layers(spec, shapes, warnings, sys.modules[__name__])
     wanted = spec.get("layers")
     tagged = [s for s in shapes if s["layer"] is not None]
     if wanted is None:
@@ -270,6 +283,8 @@ def apply_layers(spec, shapes, warnings):
 def draw_layer(page, p):
     """One layer: a white row between thin blue lines, with the label column on the left: LEVEL n and the name in big blue bold, the
     description under it in small black."""
+    if p.get("reference"):
+        return reference_layout.draw_layer(page, p, sys.modules[__name__])
     x, y, w, h = MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]
     page.rect("zone", x, y, w, h, fill=PANEL_FILL, line=PANEL_LINE, lw=1.5, key="layer:" + p["id"])
     page.line([(x + BAND_W, y), (x + BAND_W, y + h)], BLUE, lw=1.5, key="layer-divider:" + p["id"])
@@ -503,10 +518,14 @@ def draw_shape(page, s):
             size, warn = label_size(s, w - 0.1, 0.25, (9, 8, 7, 6.5, 6), True)
             page.text(x + 0.05, y + h - 0.28, w - 0.1, 0.25, s["label"], size=size, bold=True, halign=0, valign=0)
     elif s["kind"] == "group":                                      # dashed rounded blue box with its title in blue bold at the top
-        page.rect("zone", x, y, w, h, fill=s["fill"] or GROUP_FILL, line=GROUP_LINE, lw=1.5, pattern=2, rounding=0.12, key=s["key"])
+        modern = s.get("reference")
+        fill = s["fill"] or (reference_layout.CLIENT if s.get("scope") == "other" else reference_layout.BODY) if modern else s["fill"] or GROUP_FILL
+        line = reference_layout.ORANGE if modern and s.get("scope") == "other" else reference_layout.BORDER if modern else GROUP_LINE
+        page.rect("zone", x, y, w, h, fill=fill, line=line, lw=1.5, pattern=1 if s.get("solid") else 2, rounding=0.12, key=s["key"])
         if s["label"]:
             size, warn = label_size(s, w - 0.3, 0.25, (11, 10, 9, 8, 7, 6.5), True)
-            page.text(x + 0.1, y + h - 0.32, w - 0.2, 0.28, s["label"], size=size, bold=True, color=BLUE, valign=0, key=s["key"] + ":title")
+            empty = modern and not s.get("has_children")
+            page.text(x + 0.1, y + (h - .32) / 2 if empty else y + h - 0.32, w - 0.2, 0.28, s["label"], size=size, bold=True, color=reference_layout.NAVY if modern else BLUE, valign=0, key=s["key"] + ":title")
     elif s["kind"] == "pill":
         pass                                                        # label pills are not drawn any more (kind kept so older files still build)
     elif s["kind"] == "text":
@@ -560,13 +579,15 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     comps, cables = comps or Components(), cables or Cables()
     shapes, lines, warnings = prepare(spec, comps, cables, spec_dir)
     panels = apply_layers(spec, shapes, warnings)
+    logical_connections = [dict(c) for c in lines]
+    lines = reference_layout.group_connections(spec, shapes, lines)
     by_id = {s["id"]: s for s in shapes}
     page = Page()
     given_title = spec.get("title") or spec.get("project", {}).get("doc_name") or "Architecture"
     draw_frame_and_title(page, str(given_title).strip().upper())
     notes = [str(n) for n in spec.get("notes", [])]
     n_web = sum(1 for s in shapes if s["web"])
-    if n_web:
+    if n_web and spec.get("layout_style") == "legacy":
         notes.append("%d picture(s) come from outside the component library; the source is in the shape data." % n_web)
     given = dict(spec.get("project", {}))
     if "contractor" in given and "client" not in given:        # older files: Contractor is now Client
@@ -577,14 +598,17 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     rings = prepare_rings(spec, shapes, cables)
     used = sorted({c["cable"] for c in lines} | {r["cable"] for r in rings})
     try:
-        footer.build_footer(page, spec.get("project", {}), cables.legend(used), notes, allow_tbc=True)
+        footer.build_footer(page, spec.get("project", {}), cables.legend(used), notes, allow_tbc=True,
+                            style="legacy" if spec.get("layout_style") == "legacy" else "reference")
     except footer.FooterError as e:
         raise BuildError("footer: %s" % e)
     n_footer = len(page.shapes)
 
     for p in panels:                                                      # layer panels at the very back
         draw_layer(page, p)
-    for s in (s for s in shapes if s["kind"] in BEHIND):                  # zones and groups behind, then lines, then everything else on top
+    containers = [s for s in shapes if s["kind"] in BEHIND]
+    containers.sort(key=lambda s: -(s["w"] * s["h"]))                 # parents before nested children
+    for s in containers:
         w = draw_shape(page, s)
         if w:
             warnings.append(w)
@@ -603,7 +627,31 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     reqs = [dict(a=rect_of(by_id[c["a"]]), b=rect_of(by_id[c["b"]]), a_id=c["a"], b_id=c["b"], via=c["via"], straight=c["straight"],
                  from_side=c.get("from_side"), to_side=c.get("to_side"), bus=c.get("hub")) for c in lines]
     try:
-        routed = router.route_all(reqs, obstacles, (x0, BOTTOM, MARGIN + AREA_W, TOP))
+        bounds = (x0, BOTTOM, MARGIN + AREA_W, TOP)
+        group_indices = [i for i, c in enumerate(lines) if by_id[c["a"]]["kind"] == "group" or by_id[c["b"]]["kind"] == "group"]
+        normal_indices = [i for i in range(len(lines)) if i not in group_indices]
+        routed = [None] * len(lines)
+        normal_routes = router.route_all([reqs[i] for i in normal_indices], obstacles, bounds)
+        for i, pts in zip(normal_indices, normal_routes):
+            routed[i] = pts
+        for i in group_indices:
+            c, q = lines[i], reqs[i]
+            endpoint_ids = {c["a"], c["b"]}
+            def inside_endpoint(s):
+                while s.get("parent"):
+                    if s["parent"] in endpoint_ids:
+                        return True
+                    s = by_id[s["parent"]]
+                return False
+            blockers = [rect_of(s) for s in shapes if s["id"] not in endpoint_ids and s["kind"] not in SEE_THROUGH and not inside_endpoint(s)]
+            # A group's own children are inside its boundary and must not block
+            # the connector from attaching to the container's outside edge.
+            manual = q.get("via") or q.get("from_side") or q.get("to_side") or q.get("straight")
+            simple = route(q["a"], q["b"], [])
+            if not manual and not any(crosses(simple, r) for r in blockers):
+                routed[i] = simple
+            else:
+                routed[i] = router.route_all([q], blockers + [q["a"], q["b"]], bounds)[0]
     except Exception as e:                                                  # never lose the drawing over the router
         warnings.append("automatic cable routing failed (%s); plain routes used" % e)
         routed = [None] * len(lines)
@@ -619,7 +667,10 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
         arrow = c.get("hub") is not None
         if arrow and c["hub"] == c["a"]:
             pts = pts[::-1]                                                 # the arrowhead is on the last point: make that the hub end
-        page.line(pts, color, pattern, lw=CABLE_LW, key="%s->%s" % (c["a"], c["b"]), arrow=arrow)
+        key = "%s->%s" % (c["a"], c["b"])
+        if c.get("source_connections"):
+            key += "|logical=" + ",".join("%s->%s" % pair for pair in c["source_connections"])
+        page.line(pts, color, pattern, lw=CABLE_LW, key=key, arrow=arrow)
         n_lines += 1
     for c, pts in zip(lines, paths):
         if c["via"]:                                                        # a hand-routed cable may run through a device: say so
@@ -634,7 +685,8 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     warnings += ["shapes %r and %r overlap" % p for p in overlapping(shapes)]
     keep_on_page(page, n_footer, warnings)
     write_vsdx(page, out, base, title=str(spec.get("project", {}).get("project", "Architecture")))
-    return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notes": notes, "page": page}
+    return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notes": notes, "page": page,
+            "logical_connections": logical_connections, "display_connections": lines}
 
 
 def load_json(path):

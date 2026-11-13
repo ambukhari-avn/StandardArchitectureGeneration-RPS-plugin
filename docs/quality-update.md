@@ -1,5 +1,9 @@
 # Reference quality update — 1.0.2
 
+## Current layout — 1.1.0
+
+The latest user reference supersedes earlier footer/panel appearance rules. See [reference-layout.md](reference-layout.md) for the new default, including the three-card footer, navy/light-blue/orange palette, adaptive layer heights, nested containers, requested side panels and grouped box-to-box wiring. Cable colours are unchanged. `layout_style: "legacy"` keeps the earlier layout available. Every device-to-I/O connection remains recorded when instrument wires are visually grouped.
+
 ## Follow-up — 1.0.3
 
 - Short, closely spaced dashes throughout cables, ring ellipses/links, containers and legends. Internal pattern 2 now exports as native Visio pattern 23; the preview uses 2.5 pt strokes and 1.25 pt gaps. Pattern 23 is documented as tiny dashed in Microsoft's [VSDX line-pattern specification](https://learn.microsoft.com/en-us/openspecs/sharepoint_protocols/ms-vsdx/f718c500-6066-4fcc-8b66-4bb5015f133f).

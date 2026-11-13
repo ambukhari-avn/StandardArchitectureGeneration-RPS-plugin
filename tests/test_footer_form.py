@@ -53,9 +53,9 @@ class FormTests(unittest.TestCase):
         pg = Page()
         footer.build_footer(pg, fields, [{"label": "Ethernet Cable", "color": "#0070C0"}], notes)
         texts = [s["text"] for s in pg.shapes]
-        self.assertIn("End User:  King Saud University", texts)
-        self.assertIn("Project:  KSU Utilities and Facilities Relocation Project", texts)
-        self.assertTrue(any(t.startswith("1. Two ASPs") and "\n2. Redundant networking" in t for t in texts))
+        self.assertIn("CRCC / King Saud University", texts)
+        self.assertIn("KSU Utilities and Facilities Relocation Project", texts)
+        self.assertTrue(any(t.startswith("1) Two ASPs") and "\n2) Redundant networking" in t for t in texts))
 
     def test_label_matching_ignores_case_and_spacing(self):
         fields, _ = ff.parse_form("end user :  A\nCLIENT: B")

@@ -1,0 +1,39 @@
+{
+  "title": "PLC & SCADA SYSTEM ARCHITECTURE",
+  "project": {"client": "Example Client", "project": "Boxed architecture style example", "doc_name": "System Architecture", "prepared_by": "TBC", "checked_by": "TBC", "approved_by": "TBC", "revision": "R0", "sheet": "1"},
+  "notes": ["Illustrative equipment only. Use actual project devices and connections.", "The auxiliary panel is included here to demonstrate optional side-by-side placement."],
+  "layers": ["scada", "control", "field"],
+  "layer_headers": {"control": {"name": "Control System", "description": "Redundant PLC"}},
+  "shapes": [
+    {"id": "existing", "kind": "group", "label": "Existing SCADA", "layer": "scada", "scope": "other", "max_width": 5.0, "max_height": 0.75},
+    {"id": "plc-panel", "kind": "group", "label": "", "layer": "control", "width_weight": 4, "columns": 2},
+    {"id": "processors", "kind": "group", "label": "Redundant Control", "parent": "plc-panel", "row": 0, "columns": 3},
+    {"id": "primary", "label": "Primary Processor", "component": "rack_plc", "parent": "processors"},
+    {"id": "secondary", "label": "Secondary Processor", "component": "rack_plc", "parent": "processors"},
+    {"id": "hmi", "label": "HMI", "sublabel": "(Panel mounted)", "component": "hmi_panel_siemens", "parent": "processors"},
+    {"id": "io-box", "kind": "group", "label": "Simplex I/Os", "parent": "plc-panel", "row": 1, "solid": true},
+    {"id": "io", "label": "Remote I/O Modules", "component": "remote_i_o_drop", "parent": "io-box"},
+    {"id": "fg", "kind": "group", "label": "F & G System", "parent": "plc-panel", "row": 1, "scope": "other"},
+    {"id": "aux-panel", "kind": "group", "label": "UPS Panel", "layer": "control", "placement": "beside", "width_weight": 1},
+    {"id": "ups", "label": "UPS", "component": "ups", "parent": "aux-panel"},
+    {"id": "instruments", "kind": "group", "label": "", "layer": "field", "columns": 6},
+    {"id": "p1", "label": "PDS 1", "image": "pictures/pressure_transmitter.png", "parent": "instruments"},
+    {"id": "p2", "label": "PDS 2", "image": "pictures/pressure_transmitter.png", "parent": "instruments"},
+    {"id": "p3", "label": "PDT 1", "image": "pictures/pressure_transmitter.png", "parent": "instruments"},
+    {"id": "p4", "label": "PDT 2", "image": "pictures/pressure_transmitter.png", "parent": "instruments"},
+    {"id": "p5", "label": "PDT 3", "image": "pictures/pressure_transmitter.png", "parent": "instruments"},
+    {"id": "p6", "label": "PDT 4", "image": "pictures/pressure_transmitter.png", "parent": "instruments"}
+  ],
+  "lines": [
+    {"from": "existing", "to": "processors", "cable": "ethernet"},
+    {"from": "primary", "to": "secondary", "cable": "ethernet"},
+    {"from": "processors", "to": "io-box", "cable": "ethernet"},
+    {"from": "fg", "to": "io-box", "cable": "hardwired"},
+    {"from": "p1", "to": "io", "cable": "hardwired"},
+    {"from": "p2", "to": "io", "cable": "hardwired"},
+    {"from": "p3", "to": "io", "cable": "hardwired"},
+    {"from": "p4", "to": "io", "cable": "hardwired"},
+    {"from": "p5", "to": "io", "cable": "hardwired"},
+    {"from": "p6", "to": "io", "cable": "hardwired"}
+  ]
+}

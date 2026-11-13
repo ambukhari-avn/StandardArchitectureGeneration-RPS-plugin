@@ -19,7 +19,7 @@ LEGEND = [{"label": "Ethernet Cable", "color": "#0070C0"}, {"label": "Fiber Opti
 
 def build(**kw):
     pg = Page()
-    info = footer.build_footer(pg, kw.pop("fields", FIELDS), kw.pop("legend", LEGEND), kw.pop("notes", ["First note."]), **kw)
+    info = footer.build_footer(pg, kw.pop("fields", FIELDS), kw.pop("legend", LEGEND), kw.pop("notes", ["First note."]), style="legacy", **kw)
     return pg, info
 
 
@@ -78,8 +78,8 @@ class FooterTests(unittest.TestCase):
         self.assertEqual(set(boxes), {"scope:avanceon", "scope:other"})
         self.assertEqual(boxes["scope:avanceon"]["text"], "Avanceon Scope")
         self.assertEqual(boxes["scope:other"]["text"], "Client Scope")
-        self.assertEqual(boxes["scope:avanceon"]["fill"].upper(), "#E6E6E6")
-        self.assertEqual(boxes["scope:other"]["fill"].upper(), "#F6D9D9")
+        self.assertEqual(boxes["scope:avanceon"]["fill"].upper(), "#F5FAFF")
+        self.assertEqual(boxes["scope:other"]["fill"].upper(), "#FFE5B5")
         legend_x = footer.X0 + footer.LEFT_W + footer.NOTES_W + footer.SCOPE_W
         for b in boxes.values():
             self.assertLessEqual(b["x"] + b["w"], legend_x + 1e-6)

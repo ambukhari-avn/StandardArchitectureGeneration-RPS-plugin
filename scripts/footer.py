@@ -24,13 +24,13 @@ TOP = Y0 + HEIGHT                       # diagram content must stay above this l
 LEFT_W, NOTES_W, SCOPE_W = 6.20, 3.90, 1.60   # title block / notes / scope-box widths; the cable legend takes the rest
 
 # Fixed scope colours (the same on every diagram). Shapes use them through their "scope" field in build_diagram.py.
-SCOPE = {"avanceon": ("Avanceon Scope", "#E6E6E6"),     # grey
-         "other": ("Client Scope", "#F6D9D9")}          # light pink
+SCOPE = {"avanceon": ("Avanceon Scope", "#F5FAFF"),
+         "other": ("Client Scope", "#FFE5B5")}
 
 REQUIRED = ("end_user", "client", "project", "prepared_by", "checked_by", "approved_by")
 DEFAULTS = {"doc_name": "Architecture", "revision": "R0", "sheet": "1"}   # Maaden / KSU convention; override per project
 LEGEND_ROWS, LEGEND_ROW_H, LEGEND_MAX_COLS = 4, 0.20, 2
-BLUE, BORDER_LW = "#1F4E9E", 1.5
+BLUE, BORDER_LW = "#27369B", 1.5
 
 
 class FooterError(ValueError):
@@ -81,7 +81,16 @@ def _check_legend(legend):
             raise FooterError("legend entry without a label")
 
 
-def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO, logo_text="AVANCEON", parent=None):
+def build_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO, logo_text="AVANCEON", parent=None, style="reference"):
+    if style == "reference":
+        import reference_footer
+        return reference_footer.build(page, fields, legend, notes, allow_tbc, logo_path, logo_text, parent)
+    if style != "legacy":
+        raise FooterError("unknown footer style %r" % style)
+    return build_legacy_footer(page, fields, legend, notes, allow_tbc, logo_path, logo_text, parent)
+
+
+def build_legacy_footer(page, fields, legend, notes=(), allow_tbc=False, logo_path=LOGO, logo_text="AVANCEON", parent=None):
     """Add the footer shapes to `page` (must be A3). Returns {'top', 'block', 'sizes'}.
 
     logo_path : PNG placed in the logo cell (default: base/avanceon_logo.png). None -> logo_text is printed instead.
