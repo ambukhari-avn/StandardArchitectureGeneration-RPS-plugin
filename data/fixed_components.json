@@ -1,0 +1,153 @@
+{
+  "components": [
+    {
+      "id": "ethernet_switch",
+      "label": "Ethernet switch",
+      "title": "Ethernet switch",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/ethernet_switch.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "ethernet switch",
+        "network switch",
+        "scada switch"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "e31fd6399bc40f0d0d9593e8b85cdd87ef8a84d4bcc6ee5552cdb5c86a6bcf5f",
+      "sha256": "9985a6dff5abc7b79ef823367b4639533147c3a1ff0efa9c3d094226aaa3ef45",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+    },
+    {
+      "id": "fiber_optic_patch_panel",
+      "label": "Fiber optic patch panel",
+      "title": "Fiber optic patch panel",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/fiber_optic_patch_panel.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "fiber optic patch panel",
+        "fibre optic patch panel",
+        "fo patch panel",
+        "fopp"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "8111a8e05385965e854d7ba4808354678f91f302645c00f0fa6eb3f7414f935a",
+      "sha256": "16c76bacc0f58d6ff049ad1ac0b4ce0771b349a8d0549b112f7fbdd47ce351b2",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+    },
+    {
+      "id": "firewall",
+      "label": "Firewall",
+      "title": "Firewall",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/firewall.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "firewall"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "9dd75e1403409be226e7584b6d14d5f5b17527c4117143e13aed77bc74a68337",
+      "sha256": "3f5a867631d507c612cd4810072d87711fd4df9b5eae84d0f5e60652d21219c7",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+    },
+    {
+      "id": "laptop",
+      "label": "Laptop",
+      "title": "Laptop",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/laptop.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "laptop",
+        "engineering laptop"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "35950effd09f62f728a5e0accc48ecf51f1024a82bc7167c6e67e4333af99dfd",
+      "sha256": "d5be56a8d77d2276b3506002548c0c85fd1b435a7afb6b5f85ab51085c3a70f7",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+    },
+    {
+      "id": "video_wall",
+      "label": "Video wall",
+      "title": "Video wall",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/video_wall.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "video wall",
+        "videowall"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "c6f44dd43021e02b822790c519eadd4625b04f2761edbec20576aac390316737",
+      "sha256": "613b553381d7e7cb96bc77764b775184ff1e682278fa577d0890f3dcc44561a3",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+    },
+    {
+      "id": "gsm_module",
+      "label": "GSM module",
+      "title": "GSM module",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/gsm_module.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "gsm module",
+        "gsm modem"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "661ea7aa5a7ef4359329b0273aba99b9f1a56272026deaf3bb9ef3b3e2cb7fea",
+      "sha256": "0de04ac96dc3a5154222de403c68e7f6c1f6d30c2872d4ce8fcb287d97494b70",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+    },
+    {
+      "id": "ethernet_switch_variant",
+      "label": "Ethernet switch (alternate)",
+      "title": "Ethernet switch (alternate)",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/ethernet_switch_variant.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "ethernet switch alternate",
+        "alternate ethernet switch"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "4425e5c0cd100d81918a2594deee75d1432077fdad3ea8746df808053043bdc8",
+      "sha256": "698f797d2aa795f42bfe7817c39d77991fc08950d636a274def777f96f0b5b55",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+    }
+  ]
+}

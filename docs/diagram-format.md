@@ -32,7 +32,8 @@ Size is always A3. A value too long for its footer cell stops the build.
 | `columns`, `row` | group grid columns (1–24); optional zero-based explicit row on a child |
 | `placement`, `width_weight` | a requested separate control panel uses `placement: "beside"`; width_weight sets relative root-group width |
 | `solid`, `max_width`, `max_height` | solid group outline for an I/O frame; maximum root summary dimensions in inches |
-| `component` | id from `data/components.json`: the library picture; missing pictures warn and get a generic icon |
+| `component` | id from `data/components.json` or `data/fixed_components.json`; approved fixed images take priority and are embedded unchanged |
+| `image_override` | `true` only when the user explicitly requests replacing a fixed image; requires `image` and source attribution |
 | `image`, `image_source` | picture path and provenance (PNG; WebP/JPEG/GIF are converted with Pillow); source is recorded on the picture shape |
 | `background` | `auto` (default): remove a uniform light backdrop, preserve existing alpha and trim. `keep`: preserve the source background. Complex/dark backgrounds in auto mode are retained with a warning; obtain a transparent product original instead. |
 | `dashed`, `fill`, `bold`, `size` | optional look: dashed outline, `#RRGGBB` fill, bold text, font size in pt (never below 6) |
@@ -49,7 +50,7 @@ In the default reference style, links across boxes attach to container borders. 
 ## pictures (every device, instruments and third-party items included)
 Every device shows a picture, never a box with text. Give it `component` (a library id) or `image` (a PNG from the web; WebP/JPEG/GIF are converted
 if Pillow is installed) with `image_source`. **Instruments and field devices, third-party items and VM boxes are devices too and get pictures.**
-Every picture, library or web, is cleaned before it is drawn: a white or light-grey background becomes transparent (white *inside* the device is
+Approved fixed cutouts are embedded unchanged (see fixed-library.md). Other pictures are cleaned before they are drawn: a white or light-grey background becomes transparent (white *inside* the device is
 kept), it is trimmed and capped at 2400 px. Existing transparency is preserved. A device with no usable picture gets a generic device icon and a warning, never a plain box. Picture wrappers explicitly disable inherited fill, outline and shadow. Scope styling belongs on group containers, never on the device's picture.
 
 ## layers (Purdue bands)

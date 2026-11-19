@@ -94,17 +94,32 @@ def prepare(spec, comps, cables, spec_dir):
             errors.append('%s: kind must be "box" (a device: picture with caption), "zone", "group", "pill" or "text"' % where)
             continue
         label, pic, key, web = str(s.get("label", "")).strip(), None, "shape:" + sid, False
+        fixed_picture = False
         sub = str(s.get("sublabel", "")).strip() or None
         if sub is None and "\n" in label:                              # "SCADA Server\n(Primary)": first line is the name, the rest the blue line
             label, _, rest = label.partition("\n")
             label, sub = label.strip(), (rest.replace("\n", " ").strip() or None)
-        if s.get("component"):
+        component = s.get('component')
+        if kind == 'box' and not component and not s.get('image_override'):
+            component = comps.fixed_for(label)
+        if s.get('image_override') and not s.get('image'):
+            errors.append('%s: image_override requires an image explicitly requested by the user' % where)
+            continue
+        if component and not s.get('image_override'):
             try:
-                comp = comps.get(s["component"])
+                comp = comps.get(component)
             except KeyError:
-                errors.append("%s: component %r is not in the library" % (where, s["component"]))
+                errors.append("%s: component %r is not in the library" % (where, component))
                 continue
-            label, pic, key = label or comp["label"], comps.picture_path(s["component"]), "component:%s" % comp["id"]
+            if comp.get('fixed') and s.get('image'):
+                errors.append('%s: fixed library image cannot be replaced without image_override: true and an explicit user request' % where)
+                continue
+            try:
+                label, pic, key = label or comp["label"], comps.picture_path(component), "component:%s" % comp["id"]
+            except (ValueError, OSError) as e:
+                errors.append('%s: %s' % (where, e))
+                continue
+            fixed_picture = bool(comp.get('fixed'))
         elif s.get("image") and kind == "box":
             path = str(s["image"])
             path = path if os.path.isabs(path) else os.path.join(spec_dir, path)
@@ -115,7 +130,7 @@ def prepare(spec, comps, cables, spec_dir):
                 key = "image:%s|%s" % (s.get("image_source", "unknown"), sid)
             except (OSError, ValueError) as e:
                 warnings.append("%s: picture not usable (%s); drawn as a box" % (where, e))
-        if pic and kind == "box":                                       # transparent background, trimmed, not oversized
+        if pic and kind == "box" and not fixed_picture:                  # fixed cutouts are embedded byte-for-byte
             background = s.get("background", "auto")
             if background not in ("auto", "keep"):
                 errors.append('%s: background must be "auto" or "keep"' % where)
@@ -123,7 +138,7 @@ def prepare(spec, comps, cables, spec_dir):
             pic, note = pictures.prepare(pic, background=background)
             if note:
                 warnings.append("%s: %s" % (where, note))
-        elif kind == "box":                                             # no picture given: a generic device icon, never a plain box
+        elif not pic and kind == "box":                                 # no picture given: a generic device icon, never a plain box
             pic, key = GENERIC_ICON, "generic:" + sid
             warnings.append("%s: no picture (give \"component\" or \"image\"); a generic device icon is used" % where)
         x, y = _num(s.get("x")), _num(s.get("y"))

@@ -1,10 +1,9 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
 Turns an engineer's prompt (optionally with an RFQ or BOQ attached) into an editable one-page A3 Visio `.vsdx`.
+Version 1.2.0 adds seven [fixed equipment images](docs/fixed-library.md): Ethernet switch (plus alternate), fiber optic patch panel, firewall, Avanceon laptop, video wall and GSM module. They are used before web pictures and embedded unchanged unless the prompt explicitly requests a replacement. User-approved local background removal and mild enhancement preserve the supplied designs; tiny originals still limit fine detail.
 Version 1.1.0 uses the latest [boxed reference layout](docs/reference-layout.md): rounded light-blue heading cards, content-sized layers with a larger PLC/control area, nested equipment groups, optional requested side panels, shared instrument-to-I/O wiring and a three-card footer. The existing cable colours are unchanged. Try `python scripts/build_diagram.py samples/reference_boxed.json --out out/Architecture.vsdx --preview`. Older layouts remain available with `layout_style: "legacy"`.
-ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. Only two things are fixed, so they are the same for
-every diagram the team makes: the **footer** (title block, notes, legend) and the **cable colours** (from the client's drawing
-instructions). Everything else is free-form (decision D43).
+ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. The **footer**, **cable colours**, and **approved image library** provide consistent defaults across diagrams. Fixed pictures change only when the prompt explicitly requests it.
 
 ## Install
 - **ChatGPT:** create a custom GPT with `chatgpt-plugin/instructions.md` as its instructions and `arch_plugin.zip` plus the client's Word
