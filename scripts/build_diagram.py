@@ -34,7 +34,7 @@ TITLE_H, FRAME = 0.50, 0.12                          # title strip height; inset
 TOP, BOTTOM = A3_H - MARGIN - TITLE_H, footer.TOP + 0.12      # the drawing area runs between these page heights
 AREA_W, AREA_H = A3_W - 2 * MARGIN, TOP - BOTTOM
 DEFAULT_SIZE = {"box": (1.35, 1.25), "picture": (1.35, 1.25), "text": (1.50, 0.30)}   # every device is a picture with its caption underneath
-SMALL_EQUIPMENT = 0.80                                  # a displayed device narrower and shorter than this is reported as too small
+SMALL_EQUIPMENT = 0.50                                  # a displayed device narrower and shorter than this is reported as too small
 MIN_DEVICE_H = 0.60                                     # a device cell shorter than this cannot hold a picture and a caption
 GENERIC_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "icons", "generic_device.png")
 BEHIND = ("zone", "group")                              # drawn first, behind the lines and shapes
@@ -76,11 +76,40 @@ def as_png(path):
 
 
 # ---- reading the file -----------------------------------------------------------------------------------------------------
+class Warnings(list):
+    """Warnings, plus `notices`: information the operator must pass on (picture fallbacks, missing provenance) that is not a drawing defect."""
+    def __init__(self):
+        super().__init__()
+        self.notices = []
+
+
+def fixed_for_override(s):
+    return bool(s.get("image_override"))
+
+
+def expand_chains(spec):
+    """A line entry {"chain": ["plc", "rio-1", "rio-2"], "cable": "ethernet"} is a daisy chain: it becomes one
+    line per consecutive pair (plc -> rio-1, rio-1 -> rio-2). Other keys (cable, label, ...) are copied to each
+    pair. Only an explicit chain is expanded: neighbouring pictures are never connected just because they are adjacent."""
+    out = []
+    for n, c in enumerate(spec.get("lines", []), 1):
+        if isinstance(c, dict) and "chain" in c:
+            ids = c["chain"]
+            if not isinstance(ids, list) or len(ids) < 2 or not all(isinstance(i, str) for i in ids) or "from" in c or "to" in c:
+                raise BuildError('line %d: "chain" must be a list of two or more shape ids (and replaces "from"/"to")' % n)
+            rest = {k: v for k, v in c.items() if k != "chain"}
+            out += [dict(rest, **{"from": a, "to": b}) for a, b in zip(ids, ids[1:])]
+        else:
+            out.append(c)
+    spec["lines"] = out
+
+
 def prepare(spec, comps, cables, spec_dir):
     """Shapes and lines with every default filled in. Returns (shapes, lines, warnings); raises BuildError for what cannot be drawn."""
     if not isinstance(spec, dict) or not isinstance(spec.get("shapes"), list) or not spec["shapes"]:
         raise BuildError('the file must be a JSON object with a non-empty "shapes" list')
-    errors, warnings, shapes, ids = [], [], [], set()
+    expand_chains(spec)
+    errors, warnings, shapes, ids = [], Warnings(), [], set()
     for n, s in enumerate(spec["shapes"], 1):
         if not isinstance(s, dict):
             errors.append("shape %d: not an object" % n)
@@ -107,7 +136,9 @@ def prepare(spec, comps, cables, spec_dir):
         if s.get('image_override') and not s.get('image'):
             errors.append('%s: image_override requires an image explicitly requested by the user' % where)
             continue
-        if component and not s.get('image_override'):
+        provenance = None
+        use_library = bool(component) and not s.get('image_override')
+        if use_library:
             try:
                 comp = comps.get(component)
             except KeyError:
@@ -116,12 +147,19 @@ def prepare(spec, comps, cables, spec_dir):
             if comp.get('fixed') and s.get('image'):
                 errors.append('%s: fixed library image cannot be replaced without image_override: true and an explicit user request' % where)
                 continue
+            if s.get('image') and not comp.get('fixed'):
+                label = label or comp["label"]                          # a web-sourced picture for a non-fixed category; the component only supplies the caption
+                use_library = False
+        if use_library:
             try:
                 label, pic, key = label or comp["label"], comps.picture_path(component), "component:%s" % comp["id"]
             except (ValueError, OSError) as e:
                 errors.append('%s: %s' % (where, e))
                 continue
             fixed_picture = bool(comp.get('fixed'))
+            if not fixed_picture and spec.get("image_policy", "web_first") == "web_first":
+                warnings.notices.append("%s: library picture %r used as the offline fallback; search the web for the actual equipment image first "
+                                "(OEM/model if given), and report this fallback if none can be used" % (where, comp["id"]))
         elif s.get("image") and kind == "box":
             path = str(s["image"])
             path = path if os.path.isabs(path) else os.path.join(spec_dir, path)
@@ -130,6 +168,13 @@ def prepare(spec, comps, cables, spec_dir):
                 png_size(path)
                 pic, web = path, True
                 key = "image:%s|%s" % (s.get("image_source", "unknown"), sid)
+                provenance = {k: str(s[k]).strip() for k in ("image_source", "oem", "model") if str(s.get(k, "")).strip()}
+                if not fixed_for_override(s) and "image_source" not in provenance:
+                    warnings.notices.append("%s: picture has no image_source (the URL it came from); provenance is required for web pictures" % where)
+                if not ({"oem", "model"} <= provenance.keys()) and not s.get("image_override"):
+                    warnings.notices.append("%s: give oem and model for this picture, or say it is a representative illustration (generic equipment)" % where)
+                if provenance.get("oem") or provenance.get("model"):
+                    key += "|%s %s" % (provenance.get("oem", ""), provenance.get("model", ""))
             except (OSError, ValueError) as e:
                 warnings.append("%s: picture not usable (%s); drawn as a box" % (where, e))
         if pic and kind == "box" and not fixed_picture:                  # fixed cutouts are embedded byte-for-byte
@@ -224,7 +269,7 @@ def prepare(spec, comps, cables, spec_dir):
             elif v is not None:
                 sides[key] = v
         lines.append(dict(a=str(c.get("from")), b=str(c.get("to")), cable=c.get("cable"), via=via, where=where, label=str(c.get('label', '')).strip(),
-                          straight=bool(c.get("straight")), individual=bool(c.get("individual")), **sides))
+                          straight=bool(c.get("straight")), individual=bool(c.get("individual")), direct=bool(c.get("direct")), **sides))
     if errors:
         raise BuildError("\n  ".join(["cannot draw this file:"] + errors))
     return shapes, lines, warnings
@@ -662,7 +707,29 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
         group_indices = [i for i, c in enumerate(lines) if by_id[c["a"]]["kind"] == "group" or by_id[c["b"]]["kind"] == "group"]
         normal_indices = [i for i in range(len(lines)) if i not in group_indices]
         routed = [None] * len(lines)
-        normal_routes = router.route_all([reqs[i] for i in normal_indices], obstacles, bounds)
+        boxes = [rect_of(s) for s in shapes if s["kind"] in ("group", "zone")] + [(MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]) for p in panels]
+        def common_box(c):                                              # innermost group holding both ends: a cable between them stays inside it
+            def chain(i):
+                out, s = [], by_id[i]
+                while s.get("parent"):
+                    s = by_id[s["parent"]]
+                    out.append(s["id"])
+                return out
+            up_a, up_b = chain(c["a"]), set(chain(c["b"]))
+            for gid in up_a:
+                if gid in up_b:
+                    return rect_of(by_id[gid])
+            return None
+        for i, c in enumerate(lines):
+            if not (c["via"] or c.get("from_side") or c.get("to_side") or c["straight"]):
+                reqs[i]["home"] = common_box(c)
+        keepout = []                                                    # group titles are text a cable must not run through
+        for s in shapes:
+            if s["kind"] == "group" and s["label"] and s.get("has_children"):
+                gx, gy, gw, gh = rect_of(s)
+                tw = min(gw - .2, len(s["label"]) * .085 + .3)
+                keepout.append((gx + (gw - tw) / 2, gy + gh - .36, tw, .32))
+        normal_routes = router.route_all([reqs[i] for i in normal_indices], obstacles, bounds, boxes, keepout)
         for i, pts in zip(normal_indices, normal_routes):
             routed[i] = pts
         for i in group_indices:
@@ -682,7 +749,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
             if not manual and not any(crosses(simple, r) for r in blockers):
                 routed[i] = simple
             else:
-                routed[i] = router.route_all([q], blockers + [q["a"], q["b"]], bounds)[0]
+                routed[i] = router.route_all([q], blockers + [q["a"], q["b"]], bounds, boxes)[0]
     except Exception as e:                                                  # never lose the drawing over the router
         warnings.append("automatic cable routing failed (%s); plain routes used" % e)
         routed = [None] * len(lines)
@@ -717,7 +784,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     cable_labels.draw(page, lines, paths, shapes, warnings, sys.modules[__name__])
     keep_on_page(page, n_footer, warnings)
     write_vsdx(page, out, base, title=str(spec.get("project", {}).get("project", "Architecture")))
-    return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notes": notes, "page": page,
+    return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notices": list(getattr(warnings, "notices", [])), "notes": notes, "page": page,
             "logical_connections": logical_connections, "display_connections": lines}
 
 
@@ -746,6 +813,8 @@ if __name__ == "__main__":
     print("built %s: %d shapes, %d lines" % (r["out"], r["shapes"], r["lines"]))
     for w in r["warnings"]:
         print("  warning:", w)
+    for w in r["notices"]:
+        print("  notice:", w)
     if a.preview:
         import dev_preview
         png = os.path.splitext(out)[0] + "_preview.png"

@@ -1,5 +1,7 @@
 # Approved fixed equipment images
 
+Version 1.6.0 narrows the fixed set to **laptop, video wall, Ethernet switch (and its alternate) and fibre optic patch panel**. The firewall is no longer fixed: it is sourced from the web first like other equipment, and its library picture remains only as the offline fallback. See [web-first-images.md](web-first-images.md).
+
 Version 1.2.2 removes the GSM module, its aliases, image files and sample entry.
 
 Version 1.2.0 uses library images before web images. The six approved cutouts
@@ -18,13 +20,13 @@ The laptop retains its previously approved version.
 | --- | --- |
 | `ethernet_switch` | Ethernet/network/SCADA switch |
 | `fiber_optic_patch_panel` | Fiber/fibre optic patch panel, FO patch panel, FOPP |
-| `firewall` | Firewall symbol |
+| `firewall` | Firewall symbol (offline fallback only; not a fixed category from 1.6.0) |
 | `laptop` | Laptop / engineering laptop, preserving Avanceon screen branding |
 | `video_wall` | Video wall |
 | `gsm_module` | GSM module / GSM modem symbol |
 | `ethernet_switch_variant` | Alternate switch, only when requested |
 
-The active library contains six unique images; duplicate switch attachments are stored once.
+The fixed set is five approved images (plus the firewall fallback picture); duplicate switch attachments are stored once.
 Originals are retained in `data/fixed/originals/`. These are user-supplied
 illustrations, not identification of specific equipment brands or models.
 

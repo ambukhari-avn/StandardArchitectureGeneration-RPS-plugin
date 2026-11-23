@@ -5,16 +5,89 @@ All geometry stays editable. This module never supplies cable colours.
 import math
 from cable_labels import TYPICAL_LABEL
 from textfit import fit_size
+from draw import LABEL_ZONE, SUB_ZONE, visible_size, visible_box
+from vsdx_writer import png_size
 
 NAVY, BORDER = "#073878", "#27369B"
 LIGHT_BLUE, BODY, CLIENT, ORANGE = "#E4F3FF", "#F5FAFF", "#FFE5B5", "#FF8800"
 TAB_BLUE = "#001477"
-GAP, PAD, TITLE = .12, .18, .32
-LAYER_GAP = .26  # room for tabs above each layer without entering the preceding layer
+GAP, PAD, TITLE = .12, .14, .30
+LAYER_GAP = .34  # room for tabs above each layer without entering the preceding layer
 CHANNEL = .16    # clear band between device rows for cable routing
+CABLE_GAP = .50  # band between rows that hold container boxes: a cable keeps ~7 mm from both borders
+CABLE_GAP_X = .45  # side-by-side container boxes: room for a vertical cable with clearance
+BAND = .36       # clear band above and below a row inside a container whose devices are linked past a neighbour
 EDGE = .05       # clearance between the outer rows and the container border
 DEVICE_W = 1.35  # relative width weight of one device: every device in a row gets an equal share
 FILL = .90       # target occupancy of a device's image area in its limiting dimension (80-90 %)
+
+
+def natural_height(s):
+    """Relative height a device needs: its caption plus a picture height that follows the picture's shape,
+    so layers holding tall, narrow equipment (PLCs, racks) get more height than layers of wide equipment (servers, switches)."""
+    pic = s.get("pic")
+    if not pic:
+        return s["h"]
+    try:
+        l, t, r, b = visible_box(pic)
+        iw, ih = png_size(pic)
+        ar = (r - l) * iw / ((b - t) * ih)
+    except Exception:
+        return s["h"]
+    return LABEL_ZONE + (SUB_ZONE if s.get("sub") else 0) + min(1.3, max(.55, 1.2 / math.sqrt(ar)))
+
+
+_WIRED = {"pairs": [], "parent": {}, "cache": {}}
+
+
+def isgroup(c):
+    return c["kind"] == "group"
+
+
+def _subtree(item):
+    """Ids of a shape and everything inside it."""
+    key = item["id"]
+    cache = _WIRED["cache"]
+    if key not in cache:
+        cache[key] = {key} | {i for i, p in _WIRED["parent"].items() if _ancestors(i) & {key}}
+    return cache[key]
+
+
+def _ancestors(i):
+    out, parents = set(), _WIRED["parent"]
+    while parents.get(i):
+        i = parents[i]
+        out.add(i)
+    return out
+
+
+def _linked(a_items, b_items):
+    """True when some cable joins something in `a_items` with something in `b_items`."""
+    a = set().union(*[_subtree(i) for i in a_items]) if a_items else set()
+    b = set().union(*[_subtree(i) for i in b_items]) if b_items else set()
+    return any((x in a and y in b) or (x in b and y in a) for x, y in _WIRED["pairs"])
+
+
+def edge_for(rs):
+    """Clearance between a container's border and its outer rows: wide when a cable must run past a neighbouring
+    device in the same row (it needs a band to pass in), otherwise small."""
+    for row in rs:
+        for i, a in enumerate(row):
+            for b in row[i + 2:]:
+                if _linked([a], [b]):
+                    return BAND
+    return EDGE
+
+
+def vgap(upper, lower):
+    """Band between two rows: wide where container borders face each other and a cable runs between them."""
+    return CABLE_GAP if any(map(isgroup, upper + lower)) and _linked(upper, lower) else CHANNEL if not any(map(isgroup, upper + lower)) else CABLE_GAP * .5
+
+
+def hgap(left, right):
+    if not (isgroup(left) or isgroup(right)):
+        return GAP
+    return CABLE_GAP_X if _linked([left], [right]) else CABLE_GAP_X * .5
 
 
 def apply_layers(spec, shapes, warnings, B):
@@ -28,6 +101,8 @@ def apply_layers(spec, shapes, warnings, B):
     if not isinstance(wanted, list) or not wanted or any(w not in ids for w in wanted) or len(set(wanted)) != len(wanted):
         raise B.BuildError('"layers" must be a list of distinct standard layer ids')
     by_id = {s["id"]: s for s in shapes}
+    _WIRED.update(pairs=[(str(c.get("from")), str(c.get("to"))) for c in spec.get("lines", []) if isinstance(c, dict)],
+                  parent={s["id"]: s.get("parent") for s in shapes}, cache={})
     # Validate the hierarchy before modifying coordinates. Layer inheritance is
     # explicit and cycles/foreign parents never silently produce a broken page.
     def inherit(s, trail):
@@ -69,7 +144,7 @@ def apply_layers(spec, shapes, warnings, B):
     if spec.get("cable_detail", "grouped") not in ("grouped", "individual"):
         raise B.BuildError('cable_detail must be "grouped" or "individual"')
     if spec.get("cable_detail", "grouped") == "grouped":
-        racks = set()
+        racks, fed = set(), {}
         for c in spec.get("lines", []):
             if c.get("cable") != "hardwired" or c.get("individual") or c.get("via") or c.get("from_side") or c.get("to_side") or c.get("straight"):
                 continue
@@ -77,9 +152,18 @@ def apply_layers(spec, shapes, warnings, B):
             if a and b and {a.get("layer"), b.get("layer")} == {"field", "control"}:
                 target = b if b.get("layer") == "control" else a
                 if target["kind"] == "box":
-                    parent = by_id.get(target.get("parent"))
-                    if not parent or not parent.get("solid") or sum(s.get('parent') == parent['id'] and s['kind'] == 'box' for s in shapes) > 1:
-                        racks.add(target["id"])
+                    fed.setdefault(target.get("parent"), set()).add(target["id"])
+        # Racks that share one parent form ONE common I/O box: the parent becomes the
+        # solid rack frame and no rack gets a box of its own. Only a lone rack that
+        # sits among other equipment still receives a small frame, so grouped
+        # field cables have a boundary to end on.
+        for pid, members in fed.items():
+            parent = by_id.get(pid)
+            children = [s for s in shapes if s.get("parent") == pid]
+            if parent and parent["kind"] == "group" and {s["id"] for s in children if s["kind"] == "box"} == members == {s["id"] for s in children}:
+                parent["solid"] = True          # a dedicated I/O container: one box for all its racks
+            elif not parent or not parent.get("solid"):
+                racks.update(members)
         for sid in sorted(racks):
             device = by_id[sid]
             gid = "__rack_" + sid
@@ -91,6 +175,20 @@ def apply_layers(spec, shapes, warnings, B):
             device["row"] = None
             shapes.append(group)
             by_id[gid] = group
+    # I/O topology is never assumed from placement: every rack in a common I/O box needs an explicit
+    # communication line (daisy chain, switch/star or the PLC) - say so when one is missing.
+    talk = {str(c.get(k)) for c in spec.get("lines", []) if isinstance(c, dict) and c.get("cable") != "hardwired" for k in ("from", "to")}
+    for g in [s for s in shapes if s["kind"] == "group" and s.get("solid") and not s.get("generated")]:
+        for rack in [s for s in shapes if s.get("parent") == g["id"] and s["kind"] == "box"]:
+            if rack["id"] not in talk and g["id"] not in talk:
+                warnings.append("I/O rack %r has no communication line: topology is never assumed from placement; give its "
+                                "daisy-chain, star or redundant connections (a \"chain\" line, or from/to lines)" % rack["id"])
+    for g in [s for s in shapes if s["kind"] == "group" and not s.get("label") and not s.get("generated")]:
+        kids = [s for s in shapes if s.get("parent") == g["id"]]
+        if len(kids) == 1 and kids[0]["kind"] == "group":
+            warnings.append("group %r is an unlabeled box that only wraps group %r: remove it unless it marks a scope, panel, site or "
+                            "security zone (use as few boxes as the drawing allows)" % (g["id"], kids[0]["id"]))
+    _WIRED.update(parent={s["id"]: s.get("parent") for s in shapes}, cache={})   # generated groups now exist
     def children(group):
         return [s for s in shapes if s.get("parent") == group["id"]]
     def rows(group):
@@ -112,13 +210,14 @@ def apply_layers(spec, shapes, warnings, B):
         return [members[i:i + cols] for i in range(0, len(members), cols)]
     def measure(s):
         if s["kind"] != "group":
-            return DEVICE_W, s["h"]  # natural size is only a weight: it is never a maximum
+            return DEVICE_W, natural_height(s)  # natural size is only a weight: it is never a maximum
         rs = rows(s)
         if not rs:
             return s["w"], .75  # a system summary box needs little height
         dims = [[measure(c) for c in row] for row in rs]
-        return (max(sum(w for w, h in row) + GAP * (len(row) - 1) for row in dims) + 2 * PAD,
-                sum(max(h for w, h in row) for row in dims) + CHANNEL * (len(dims) - 1) + 2 * (PAD + EDGE) + (TITLE if s["label"] else 0))
+        width = max(sum(w for w, h in row) + sum(hgap(a, b) for a, b in zip(r, r[1:])) for row, r in zip(dims, rs))
+        height = sum(max(h for w, h in row) for row in dims) + sum(vgap(a, b) for a, b in zip(rs, rs[1:]))
+        return (width + 2 * PAD, height + 2 * (PAD + edge_for(rs)) + (TITLE if s["label"] else 0))
     weights = spec.get("layer_weights", {})
     if not isinstance(weights, dict) or any(k not in wanted or B._num(v) is None or float(v) <= 0 for k, v in weights.items()):
         raise B.BuildError("layer_weights must map included layer ids to positive numbers")
@@ -159,17 +258,18 @@ def apply_layers(spec, shapes, warnings, B):
         shares = [float(s.get("width_weight") or (1 if s in side else 3 if side else 1)) for s in roots]
         if any(not math.isfinite(v) or v <= 0 for v in shares):
             raise B.BuildError("width_weight must be positive")
-        usable = width - GAP * max(0, len(roots) - 1)
+        usable = width - CABLE_GAP_X * max(0, len(roots) - 1)
         for s, share in zip(roots, shares):
             w = usable * share / sum(shares)
             pw, ph = min(w, float(s.get("max_width") or w)), min(height, float(s.get("max_height") or height))
             place(s, x, y + header + (height - ph) / 2, pw, ph, rows, measure, warnings, B)
-            x += w + GAP
+            x += w + CABLE_GAP_X
         y += h + LAYER_GAP
     for s in shapes:
         s["reference"] = True
         s["has_children"] = any(c.get("parent") == s["id"] for c in shapes)
     equalise(shapes)
+    tighten(shapes)
     return panels
 
 
@@ -194,26 +294,54 @@ def place(s, x, y, w, h, rows, measure, warnings, B):
     title = min(TITLE, h * .18) if s["label"] else 0
     inner_w, inner_h = w - 2 * padding, h - 2 * padding - title
     dims = [[measure(c) for c in row] for row in rs]
-    channel = min(CHANNEL, max(.04, inner_h / (4. * (len(rs) + 1))))
-    edge = min(EDGE, channel)
+    edge = min(edge_for(rs), inner_h / 6.)
     row_nat = [max(ch for cw, ch in row) for row in dims]
-    avail_h = inner_h - channel * (len(rs) - 1) - 2 * edge
+    channels = [vgap(a, b) for a, b in zip(rs, rs[1:])]
+    room = inner_h - 2 * edge
+    if sum(channels) > .45 * room:                                  # never let the channels crowd the equipment out
+        channels = [c * .45 * room / sum(channels) for c in channels]
+    avail_h = room - sum(channels)
     if avail_h <= 0 or inner_w <= 0:
         raise B.BuildError("group %r cannot fit its contents on A3" % s["id"])
     heights = [avail_h * n / sum(row_nat) for n in row_nat]
     cy = y + padding + title + edge
-    for row, sizes, rh in zip(rs, dims, heights):
-        gap = min(GAP, inner_w * .02)
-        usable = inner_w - gap * (len(row) - 1)
+    for r, (row, sizes, rh) in enumerate(zip(rs, dims, heights)):
+        gaps = [hgap(a, b) for a, b in zip(row, row[1:])]
+        if sum(gaps) > .3 * inner_w:
+            gaps = [g * .3 * inner_w / sum(gaps) for g in gaps]
+        usable = inner_w - sum(gaps)
         total = sum(cw for cw, ch in sizes)
-        if usable / total < .65 * DEVICE_W or rh < .65 * min(ch for cw, ch in sizes):
+        if usable / total < .55 * DEVICE_W or rh < .5 * min(ch for cw, ch in sizes):
             warnings.append("group %r is crowded; increase its layer weight or reduce equipment" % s["id"])
         cx = x + padding
-        for c, (cw, ch) in zip(row, sizes):
+        for k, (c, (cw, ch)) in enumerate(zip(row, sizes)):
             cell_w = usable * cw / total
             place(c, cx, cy, cell_w, rh, rows, measure, warnings, B)
-            cx += cell_w + gap
-        cy += rh + channel
+            cx += cell_w + (gaps[k] if k < len(gaps) else 0)
+        cy += rh + (channels[r] if r < len(channels) else 0)
+
+
+def tighten(shapes):
+    """After sizing, shrink every device's rectangle to the footprint it really occupies: the picture's visible
+    equipment (at FILL occupancy) plus its caption. Cables then attach to the equipment instead of to empty
+    cell space, and the clearance rules measure from the equipment."""
+    for d in shapes:
+        if d["kind"] != "box" or not d.get("reference") or not d.get("pic"):
+            continue
+        sub_h = SUB_ZONE if d.get("sub") else 0
+        area_h = d["h"] - LABEL_ZONE - sub_h
+        if area_h <= 0:
+            continue
+        try:
+            vis_w, vis_h = visible_size(d["pic"], d["w"], area_h, FILL)
+        except Exception:
+            continue
+        caption = max(len(d["label"]), len(d.get("sub") or "")) * .0546 + .08
+        new_w = min(d["w"], max(vis_w / FILL, caption))
+        new_h = min(d["h"], vis_h / FILL + LABEL_ZONE + sub_h)
+        d["x"] += (d["w"] - new_w) / 2
+        d["y"] += (d["h"] - new_h) / 2
+        d["w"], d["h"] = new_w, new_h
 
 
 def equalise(shapes):
@@ -230,8 +358,8 @@ def equalise(shapes):
             d["y"] += (d["h"] - hs) / 2
             d["h"] = hs
     by_key = {}
-    for d in devices:
-        by_key.setdefault(d.get("key"), []).append(d)
+    for d in devices:                       # the same picture file means the same equipment type
+        by_key.setdefault(d.get("pic") or d.get("key"), []).append(d)
     for key, group in by_key.items():
         if len(group) > 1 and key:
             apply(group)
@@ -263,7 +391,7 @@ def group_connections(spec, shapes, lines):
     out, shared = [], {}
     for c in lines:
         a, b = by_id[c["a"]], by_id[c["b"]]
-        explicit = c.get("individual") or c.get("via") or c.get("from_side") or c.get("to_side") or c.get("straight")
+        explicit = c.get("individual") or c.get("direct") or c.get("via") or c.get("from_side") or c.get("to_side") or c.get("straight")
         if explicit:
             out.append(c)
             continue
@@ -293,7 +421,7 @@ def draw_layer(page, p, B):
     # Descriptions use a shallow header row; equipment fills the width below.
     page.rect("zone", x, y, w, h, fill=BODY, line=BORDER, lw=1.5, rounding=.04, key="layer:" + p["id"])
     label = p["name"]
-    tab_w = min(w - .24, max(1.7, min(3.15, .22 + len(label) * .11)))
+    tab_w = min(w - .24, max(1.7, min(3.4, .30 + len(label) * .135)))
     tab_h, tab_y = .36, y + h - .18
     size = fit_size(label, tab_w - .20, tab_h - .04, (14, 13, 12, 11, 10, 9, 8), True)
     page.rect("zone", x + .13, tab_y, tab_w, tab_h, fill=TAB_BLUE, line=TAB_BLUE,

@@ -15,11 +15,16 @@ import heapq
 import math
 from bisect import bisect_left, bisect_right
 
-CLEAR = 0.06              # clearance kept round every device
+CLEAR = 0.06              # clearance kept round every device (last-resort minimum)
+CLEAR_PREFERRED = (0.31, 0.15, CLEAR)   # clearance tried in turn (0.31 in = 8 mm); the first that routes every cable is used
+BOX_CLR = 0.31            # preferred distance (8 mm) between a cable and the border of a box it only passes
+SEPARATION = 0.16        # parallel cables are kept at least this far apart (4 mm) where there is room
+HOME_IN = 0.14           # a cable between two devices of one container keeps this far inside its border
+BOX_RUN = 2.5             # extra cost per inch of running along (or right beside) a box border
 STUB = 0.15               # first / last piece of a cable, at a right angle to the device edge
-BEND, CROSS, TOUCH, OVERLAP, NEAR, ROW = 1.3, 1.8, 2.5, 5.0, 0.4, 2.2   # penalties (inches of extra length they are worth); NEAR = running right beside another cable, ROW = factor for a horizontal run level with a row of devices (cables belong in the channels between rows)
+BEND, CROSS, TOUCH, OVERLAP, NEAR, ROW = 1.3, 1.8, 2.5, 5.0, 1.2, 2.2   # penalties (inches of extra length they are worth); NEAR = running right beside another cable, ROW = factor for a horizontal run level with a row of devices (cables belong in the channels between rows)
 SIDEPEN = 3.0            # extra cost for leaving / entering a device by a side that does not face the other device
-TRACK = 0.12              # spacing of the always-available tracks (so parallel cables can be kept apart)
+TRACK = 0.16              # spacing of the always-available tracks: parallel cables stay 4 mm apart
 SPREAD = 0.28             # spacing between cables that attach to the same side of a device
 HOP_R = 0.07              # radius of a hop
 SIDES = {"left": (-1, 0), "right": (1, 0), "top": (0, 1), "bottom": (0, -1)}
@@ -87,7 +92,7 @@ def _uniq(vals, lo, hi, tol=0.012):
 
 
 class Grid:
-    def __init__(self, rects, bounds, extra_x=(), extra_y=()):
+    def __init__(self, rects, bounds, extra_x=(), extra_y=(), clear=CLEAR, boxes=(), keepout=()):
         x0, y0, x1, y1 = bounds
         xs, ys = [x0, x1] + list(extra_x), [y0, y1] + list(extra_y)
         xs += [x0 + k * TRACK for k in range(1, int((x1 - x0) / TRACK))]
@@ -111,8 +116,8 @@ class Grid:
         nx, ny = len(self.xs), len(self.ys)
         self.hb = [bytearray(ny) for _ in range(max(nx - 1, 0))]      # hb[i][j]: edge (i,j)-(i+1,j) blocked
         self.vb = [bytearray(max(ny - 1, 0)) for _ in range(nx)]      # vb[i][j]: edge (i,j)-(i,j+1) blocked
-        for (x, y, w, h) in rects:
-            rx0, rx1, ry0, ry1 = x - CLEAR, x + w + CLEAR, y - CLEAR, y + h + CLEAR
+        for (x, y, w, h), clr in [(r, clear) for r in rects] + [(r, .03) for r in keepout]:
+            rx0, rx1, ry0, ry1 = x - clr, x + w + clr, y - clr, y + h + clr
             jlo, jhi = bisect_right(self.ys, ry0 + 1e-9), bisect_left(self.ys, ry1 - 1e-9)
             for j in range(jlo, jhi):                                 # horizontal edges at rows strictly inside the rectangle
                 for i in range(max(bisect_right(self.xs, rx0 + 1e-9) - 1, 0), min(bisect_left(self.xs, rx1 - 1e-9), nx - 1)):
@@ -121,6 +126,23 @@ class Grid:
             for i in range(ilo, ihi):
                 for j in range(max(bisect_right(self.ys, ry0 + 1e-9) - 1, 0), min(bisect_left(self.ys, ry1 - 1e-9), ny - 1)):
                     self.vb[i][j] = 1
+
+        # Edges that run along (or right beside) the border of a box are marked so the search avoids them.
+        self.hn = [bytearray(ny) for _ in range(max(nx - 1, 0))]
+        self.vn = [bytearray(max(ny - 1, 0)) for _ in range(nx)]
+        for (x, y, w, h) in boxes:
+            for yy in (y, y + h):                                     # horizontal borders: mark horizontal edges beside them
+                jlo, jhi = bisect_right(self.ys, yy - BOX_CLR + 1e-9), bisect_left(self.ys, yy + BOX_CLR - 1e-9)
+                ilo, ihi = max(bisect_right(self.xs, x + 1e-9) - 1, 0), min(bisect_left(self.xs, x + w - 1e-9), nx - 1)
+                for j in range(jlo, jhi):
+                    for i in range(ilo, ihi):
+                        self.hn[i][j] = 1
+            for xx in (x, x + w):                                     # vertical borders
+                ilo, ihi = bisect_right(self.xs, xx - BOX_CLR + 1e-9), bisect_left(self.xs, xx + BOX_CLR - 1e-9)
+                jlo, jhi = max(bisect_right(self.ys, y + 1e-9) - 1, 0), min(bisect_left(self.ys, y + h - 1e-9), ny - 1)
+                for i in range(ilo, ihi):
+                    for j in range(jlo, jhi):
+                        self.vn[i][j] = 1
 
     def ix(self, x):
         i = bisect_left(self.xs, x - 0.013)
@@ -145,10 +167,16 @@ class Occupancy:
     def add(self, grid, nodes):
         for (i, j), (k, l) in zip(nodes, nodes[1:]):
             self.edges.add((min(i, k), min(j, l), 0 if j == l else 1))
-            if j == l:                                                # the tracks either side of a horizontal run, and of a vertical one
-                self.near.update({(min(i, k), j - 1, 0), (min(i, k), j + 1, 0)})
+            if j == l:                                                # every track within SEPARATION of a horizontal run, and of a vertical one
+                y = grid.ys[j]
+                for jj in range(bisect_left(grid.ys, y - SEPARATION + 1e-9), bisect_right(grid.ys, y + SEPARATION - 1e-9)):
+                    if jj != j:
+                        self.near.add((min(i, k), jj, 0))
             else:
-                self.near.update({(i - 1, min(j, l), 1), (i + 1, min(j, l), 1)})
+                x = grid.xs[i]
+                for ii in range(bisect_left(grid.xs, x - SEPARATION + 1e-9), bisect_right(grid.xs, x + SEPARATION - 1e-9)):
+                    if ii != i:
+                        self.near.add((ii, min(j, l), 1))
         for n, (i, j) in enumerate(nodes):
             mid = 0 < n < len(nodes) - 1
             if not mid:
@@ -165,7 +193,7 @@ class Occupancy:
 
 
 # ---- the search ---------------------------------------------------------------------------------------------------------------
-def _search(grid, occ, starts, targets, bend_cost):
+def _search(grid, occ, starts, targets, bend_cost, home=None):
     """A* from the start stubs to any target stub. starts: [(node, dir, port, cost)], targets: {node: [(inward_dir_index, port)]}.
     Returns (cost, nodes, start_port, end_port) or None."""
     xs, ys = grid.xs, grid.ys
@@ -197,11 +225,15 @@ def _search(grid, occ, starts, targets, bend_cost):
             ni, nj = i + DIRS[nd][0], j + DIRS[nd][1]
             if not (0 <= ni < len(xs) and 0 <= nj < len(ys)) or grid.blocked(i, j, nd):
                 continue
+            if home and not (home[0] - 0.02 <= xs[ni] <= home[0] + home[2] + 0.02 and home[1] - 0.02 <= ys[nj] <= home[1] + home[3] + 0.02):
+                continue                                              # both ends share a container: the cable stays inside it
             length = abs(xs[ni] - xs[i]) + abs(ys[nj] - ys[j])
             c = cost + length + (bend_cost if nd != d else 0)
             ek = (min(i, ni), min(j, nj), 0 if nd < 2 else 1)
             if nd < 2 and grid.row[j]:
                 c += (ROW - 1) * length
+            if (grid.hn[min(i, ni)][j] if nd < 2 else grid.vn[i][min(j, nj)]):
+                c += BOX_RUN * length
             if ek in occ.edges:
                 c += OVERLAP * length
             elif ek in occ.near:
@@ -242,7 +274,7 @@ def _endpoints(grid, r, side_names, other, fixed):
     return out
 
 
-def _one(grid, occ, ra, rb, sides_a, sides_b, fixed_a, fixed_b, bend_cost):
+def _one(grid, occ, ra, rb, sides_a, sides_b, fixed_a, fixed_b, bend_cost, home=None):
     starts, targets = [], {}
     for p, sd in _endpoints(grid, ra, sides_a, rb, fixed_a):
         i, j = _stub_node(grid, p, sd)
@@ -256,7 +288,15 @@ def _one(grid, occ, ra, rb, sides_a, sides_b, fixed_a, fixed_b, bend_cost):
             targets.setdefault((i, j), []).append((inward, (p, sd), 0 if sd == facing_side(rb, ra) else SIDEPEN))
     if not starts or not targets:
         return None
-    return _search(grid, occ, starts, targets, bend_cost)
+    inner = (home[0] + HOME_IN, home[1] + HOME_IN, home[2] - 2 * HOME_IN, home[3] - 2 * HOME_IN) if home else None
+    res = _search(grid, occ, starts, targets, bend_cost, inner) if inner and inner[2] > 0 and inner[3] > 0 else None
+    if res is None and home:
+        res = _search(grid, occ, starts, targets, bend_cost, home)   # tight container: allow running close to its border
+    if res is None and home:
+        res = _search(grid, occ, starts, targets, bend_cost)         # no way to stay inside: leave the container
+    if res is None and not home:
+        res = _search(grid, occ, starts, targets, bend_cost)
+    return res
 
 
 def _pts(grid, nodes, a_port, b_port):
@@ -362,7 +402,23 @@ def _order_tracks(items):
     return best[1]
 
 
-def channel_routes(requests, rects, bounds):
+def _free_band(lo, hi, boxes, xmin, xmax):
+    """The part of the band (lo, hi) where a track keeps BOX_CLR away from every horizontal box border that lies over the cable's span.
+    When no part is wide enough the widest gap between borders is used, so the cable still runs half way between them."""
+    ys = sorted({yy for (x, y, w, h) in boxes if x < xmax and x + w > xmin for yy in (y, y + h) if lo + 1e-6 < yy < hi - 1e-6})
+    if not ys:
+        return lo, hi, False
+    edges = [lo] + ys + [hi]
+    spans = [(a, b) for a, b in zip(edges, edges[1:])]
+    a, b = max(spans, key=lambda ab: ab[1] - ab[0])
+    # pad inwards only where the span is bounded by a border (device edges are already kept clear)
+    na, nb = (a + BOX_CLR if a != lo else a), (b - BOX_CLR if b != hi else b)
+    if nb - na < 0:
+        return (a + b) / 2 - .1, (a + b) / 2 + .1, True
+    return na, nb, True
+
+
+def channel_routes(requests, rects, bounds, boxes=()):
     """Tidy routes for cables between devices that sit in rows (layered drawings): leave by the top or bottom, run along a track in the free
     band between the rows, enter by the top or bottom. Returns a list with a point list per request, None where this style does not apply."""
     out = [None] * len(requests)
@@ -408,6 +464,8 @@ def channel_routes(requests, rects, bounds):
             continue
         a, b = q["a"], q["b"]
         ra, rb = row_of[a], row_of[b]
+        if ra == rb and boxes:                                          # same row, not straight neighbours: the grid router keeps it inside the shared container
+            continue
         if ra == rb:                                                    # same row: round the top or the bottom, whichever band is less used
             k = ra if load.get(ra, 0) <= load.get(ra + 1, 0) else ra + 1
             side = "top" if k == ra else "bottom"
@@ -459,7 +517,11 @@ def channel_routes(requests, rects, bounds):
     ytrack = {}
     for k, items in per_chan.items():
         lo_y, hi_y = chan[k]
-        avail = hi_y - lo_y - 0.2
+        margin = 0.2
+        if boxes:                                                       # keep tracks clear of container borders inside the band
+            lo_y, hi_y, padded = _free_band(lo_y, hi_y, boxes, min(i["l"] for i in items), max(i["r"] for i in items))
+            margin = 0.0 if padded else margin
+        avail = hi_y - lo_y - margin
         if avail < 0:
             continue
         order = _order_tracks(items)                                    # top track first
@@ -517,7 +579,21 @@ def _manhattan(q):
     return abs(ax + aw / 2 - bx - bw / 2) + abs(ay + ah / 2 - by - bh / 2)
 
 
-def route_all(requests, rects, bounds):
+def route_all(requests, rects, bounds, boxes=(), keepout=()):
+    """Route with the widest device clearance that still finds a route for every cable (CLEAR_PREFERRED, widest first).
+    boxes: rectangles of containers / layers whose borders cables should not run along."""
+    best = None
+    for clear in CLEAR_PREFERRED:
+        res = _route_all(requests, rects, bounds, boxes, clear, keepout)
+        missing = sum(1 for n, r in enumerate(res) if r is None and not requests[n].get("via"))
+        if best is None or missing < best[0]:
+            best = (missing, res)
+        if missing == 0:
+            break
+    return best[1]
+
+
+def _route_all(requests, rects, bounds, boxes, clear, keepout=()):
     """requests: [{a, b (rectangles), a_id, b_id, via, from_side, to_side, straight}]. rects: every device rectangle (obstacles).
     Returns a list of point lists (None where no clear route exists: the caller falls back to a plain route).
     Pass 1 routes the cables (short ones first, so they stay direct) and finds which cables share a side of a device; pass 2 spreads
@@ -527,14 +603,14 @@ def route_all(requests, rects, bounds):
     for n, q in enumerate(requests):
         if q.get("via"):
             results[n] = manual(q["a"], q["b"], q["via"], q.get("from_side"), q.get("to_side"))
-    tidy = channel_routes(requests, rects, bounds)
+    tidy = channel_routes(requests, rects, bounds, boxes)
     for n in list(auto):
         if tidy[n] is not None:
             results[n] = tidy[n]
     auto = [n for n in auto if tidy[n] is None]
     if not auto:
         return results
-    grid, fixed, first = Grid(rects, bounds), {}, None
+    grid, fixed, first = Grid(rects, bounds, clear=clear, boxes=boxes, keepout=keepout), {}, None
     for attempt in (1, 2):
         occ = Occupancy()
         chosen = {}
@@ -544,7 +620,7 @@ def route_all(requests, rects, bounds):
             sa = [q["from_side"]] if q.get("from_side") else list(SIDES)
             sb = [q["to_side"]] if q.get("to_side") else list(SIDES)
             fa, fb = fixed.get((n, "a")), fixed.get((n, "b"))
-            res = _one(grid, occ, q["a"], q["b"], sa, sb, {fa[1]: fa[0]} if fa else None, {fb[1]: fb[0]} if fb else None, bend)
+            res = _one(grid, occ, q["a"], q["b"], sa, sb, {fa[1]: fa[0]} if fa else None, {fb[1]: fb[0]} if fb else None, bend, q.get("home"))
             if res is None:
                 results[n] = first[n] if first and first[n] else None
                 continue
@@ -583,7 +659,7 @@ def route_all(requests, rects, bounds):
                 (extra_y if horizontal_side else extra_x).append(pt[1] if horizontal_side else pt[0])
         if not fixed:
             break
-        grid = Grid(rects, bounds, extra_x, extra_y)                   # the grid now has a track for every spread position
+        grid = Grid(rects, bounds, extra_x, extra_y, clear, boxes, keepout)    # the grid now has a track for every spread position
     return results
 
 

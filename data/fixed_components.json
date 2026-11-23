@@ -56,14 +56,15 @@
       "picture": "fixed/firewall.png",
       "duplicate_of": null,
       "source_row": null,
-      "fixed": true,
+      "fixed": false,
       "aliases": [
         "firewall"
       ],
-      "source": "User-approved high-resolution replacement, 2026-11-23",
+      "source": "User-approved high-resolution replacement, 2026-11-23 | v1.6.0: no longer a fixed category; used only as the offline fallback picture when no web image is available",
       "original_sha256": "087d5c90e569a4f5362d0ad89a399bba881a5922624f1939c451400db5524353",
       "sha256": "087d5c90e569a4f5362d0ad89a399bba881a5922624f1939c451400db5524353",
-      "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly."
+      "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly.",
+      "fallback_only": true
     },
     {
       "id": "laptop",

@@ -55,6 +55,15 @@ def visible_box(pic):
         return (0., 0., 1., 1.)
 
 
+def visible_size(pic, w, area_h, fill):
+    """Displayed (width, height) of the visible equipment when fitted into a w x area_h area at `fill` occupancy."""
+    l, t, r, b = visible_box(pic)
+    iw, ih = png_size(pic)
+    vw, vh = (r - l) * iw, (b - t) * ih
+    shown_w = min(w * fill, area_h * fill * vw / vh)
+    return shown_w, shown_w * vh / vw
+
+
 def draw_picture(page, pic, label, x, y, w, h, key, parent=None, soft=False, sub=None, bold=False, fill=1.0, visible=False):
     """A picture (PNG path) in the cell, true aspect ratio, centred, with `label` underneath.
     sub: an optional second caption line printed under the label in blue. bold: the label in bold.
@@ -75,9 +84,8 @@ def draw_picture(page, pic, label, x, y, w, h, key, parent=None, soft=False, sub
         # Size by the visible equipment (transparent margins ignored) so that it fills `fill`
         # of the area in the limiting dimension; the image file is placed unchanged.
         l, t, r, b = visible_box(pic)
-        vw, vh = (r - l) * iw, (b - t) * ih
-        shown_w = min(w * fill, area_h * fill * vw / vh)
-        pw, ph = shown_w / (r - l), shown_w * vh / vw / (b - t)
+        shown_w, shown_h = visible_size(pic, w, area_h, fill)
+        pw, ph = shown_w / (r - l), shown_h / (b - t)
         img = page.image(ax - (l + r) / 2 * pw, ay - (1 - (t + b) / 2) * ph, pw, ph, pic, parent, key=key)
     else:
         pw = min(w, area_h * iw / ih)

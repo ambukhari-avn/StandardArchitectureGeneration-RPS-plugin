@@ -25,8 +25,11 @@ class FixedLibraryTests(unittest.TestCase):
     def prepare(self, spec):
         return B.prepare(spec, self.c, Cables(), tempfile.gettempdir())
 
-    def test_six_assets_have_transparency_and_approved_hashes(self):
-        self.assertEqual(len(self.c.fixed), 6)
+    def test_five_fixed_assets_have_transparency_and_approved_hashes(self):
+        self.assertEqual(set(self.c.fixed), {'ethernet_switch', 'ethernet_switch_variant', 'fiber_optic_patch_panel', 'laptop', 'video_wall'})
+        self.assertNotIn('firewall', self.c.fixed)                 # web-first now; its picture is only an offline fallback
+        self.assertIsNone(self.c.fixed_for('Firewall'))
+        self.assertIsNotNone(self.c.picture_path('firewall'))
         self.assertNotIn('gsm_module', self.c.by_id)
         self.assertIsNone(self.c.fixed_for('GSM module'))
         self.assertIsNone(self.c.fixed_for('GSM modem'))

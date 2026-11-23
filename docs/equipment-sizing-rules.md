@@ -24,7 +24,7 @@ These rules apply to every device picture in the default reference layout: SCADA
 ## D. Image quality and verification
 
 11. **Sharp sources.** Prefer high-resolution originals. Enlarging a low-resolution picture adds no detail. The builder warns with the pixels per displayed inch of every picture below 200 (web pictures below 150) and names approved fixed images it leaves unchanged. Report every remaining limitation to the user.
-12. **Verify the A3 preview before delivery.** Check that all equipment is clearly recognisable at normal page-view size, comparable devices match, and no pictures, captions or cables overlap. The builder warns when equipment is displayed under 0.80 in across ("equipment is only ... in across"): treat it as too small and rebuild with fewer items per row, a higher `layer_weights` value for that layer, or a different `columns` / `row` split.
+12. **Verify the A3 preview before delivery.** Check that all equipment is clearly recognisable at normal page-view size, comparable devices match, and no pictures, captions or cables overlap. The builder warns when equipment is displayed under 0.50 in across ("equipment is only ... in across"): treat it as too small and rebuild with fewer items per row, a higher `layer_weights` value for that layer, or a different `columns` / `row` split.
 13. **Preserve the existing requirements.** Enlargement keeps the approved topology, equipment quantities, fixed artwork, cable colours, line weights, layer order, footer and editable Visio output unchanged.
 
 ## Where the rules live in the code

@@ -131,16 +131,17 @@ class BoxedLayoutTests(unittest.TestCase):
         wire = next(c for c in result["display_connections"] if c.get("source_connections") == [("sw", "plc")])
         self.assertEqual((wire["a"], wire["b"]), ("__equipment_scada", "__equipment_control"))
 
-    def test_distinct_racks_inside_one_solid_panel_keep_distinct_boundaries(self):
+    def test_racks_in_one_common_io_box_share_one_representative_cable(self):
         spec = self.sample()
         spec['shapes'].append({'id': 'io2', 'label': 'Second I/O Rack', 'parent': 'io-box', 'component': 'remote_i_o_drop'})
         spec['lines'][5]['to'] = 'io2'
         shapes, lines, warnings = B.prepare(spec, B.Components(), Cables(), os.path.join(ROOT, 'samples'))
         B.apply_layers(spec, shapes, warnings)
+        self.assertFalse(any(s['id'].startswith('__rack_') for s in shapes))      # no box around an individual rack
         display = R.group_connections(spec, shapes, lines)
         trunks = [c for c in display if c.get('representative')]
-        self.assertEqual({c['b'] for c in trunks}, {'__rack_io', '__rack_io2'})
-        self.assertEqual(sorted(len(c['source_connections']) for c in trunks), [1, 5])
+        self.assertEqual({c['b'] for c in trunks}, {'io-box'})                    # one cable to the common I/O box
+        self.assertEqual(len(trunks[0]['source_connections']), 6)                 # every instrument relationship is kept
 
     def test_optional_panel_is_beside_control_and_never_added_unasked(self):
         spec = self.sample()

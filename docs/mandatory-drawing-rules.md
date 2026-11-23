@@ -17,19 +17,21 @@ title block, scope colours, cable palette and line weights; preserve those setti
 ## B. Cable connectivity
 
 1. Connect field instruments to their associated PLC I/O rack with hardwired signal connections where specified.
-2. Group instruments sharing a destination I/O rack and show one representative hardwired connection from their group boundary to that rack.
+2. Group the instruments of one PLC system in one field-instrument container and show one representative hardwired connection from that container's boundary to the common I/O box of the corresponding PLC system.
 3. Preserve each individual instrument-to-I/O relationship in the architecture data and connector metadata.
-4. Never combine different destination I/O racks into a representative cable, even if they share a panel.
+4. All racks of one PLC system sit in one common I/O box, so one representative cable ends at that box. Never combine different I/O boxes (different PLC systems or panels) into one representative cable.
 5. Label representative connections exactly “Typical Hardwired Signals — AI/DI/AO/DO.” This is a generic drawing convention, not proof that every listed signal type is used.
 6. Add a note explaining that grouped lines represent multiple physical field connections.
 7. Connect redundant controllers through their specified dedicated redundancy/synchronization interfaces.
 8. Show separate synchronization links only when supported or required by the selected controller platform.
-9. Connect PLCs, SCADA servers, workstations and network devices according to the specified physical topology.
+9. Connect PLCs, SCADA servers, workstations and network devices according to the specified physical topology. Connect I/O racks to the PLC by the specified topology only: a daisy chain (`chain`) in sequence, a star through the named switch or interface, or the stated redundant paths. Never connect racks because they are drawn side by side, and never assume an FO ring, Ethernet ring or redundant I/O network.
 10. Distinguish Ethernet, fibre optic, RS-485/Modbus, BACnet and hardwired links using the existing cable configuration. The `modbus` cable key is appropriate only for a specified RS-485/Modbus link; do not assume all Modbus is serial.
 11. Never choose cable types from assumptions. Resolve missing interface information before building.
 12. Show communication redundancy only when explicitly specified or technically validated.
 
 ## C. Cable routing and appearance
+
+The router keeps about 8 mm (at least 4 mm where space is tight) between cables and unrelated box borders, runs parallel cables about 4 mm apart where the band allows, stays off group titles, layer borders and labels, and keeps a cable between two devices of one container inside it. These are implemented in the layout and router, not only requested.
 
 1. Use horizontal and vertical orthogonal segments; no diagonal cable routes. Small crossing hops are the established visual exception.
 2. Attach lines continuously to equipment or group boundaries without gaps.
@@ -46,9 +48,11 @@ title block, scope colours, cable palette and line weights; preserve those setti
 2. Represent multiple I/O modules as one rack unless module-level detail is requested.
 3. Omit terminal blocks, DIN rails, cable cores and panel accessories from proposal architecture.
 4. Include every major functional device required by the project.
-5. Use consistent library pictures for equipment categories.
+5. Use one consistent picture for the same equipment (same OEM and model); the fixed categories always use their approved library pictures.
 6. Add manufacturer/model captions only when specified. Library catalogue metadata does not authorize inventing a model.
-7. Never invent equipment to fill space.
+7. Draw few boxes: one SCADA container, one container per PLC system, one common I/O box per PLC system and one field-instrument group per PLC system. Add other boxes only for scope, panels, sites or security zones.
+8. Equipment pictures are sourced web first (see `web-first-images.md`); only the fixed categories keep the approved library pictures.
+9. Never invent equipment to fill space.
 
 ## E. Redundancy and topology
 

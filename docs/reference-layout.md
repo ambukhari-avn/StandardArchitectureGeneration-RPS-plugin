@@ -1,4 +1,4 @@
-# Boxed reference layout (1.5.0)
+# Boxed reference layout (1.6.0)
 
 The current default follows `reference-style.png`. Bold white layer names sit on compact navy tabs (#001477) overlapping full-width pale layer frames (#F5FAFF) with blue borders (#27369B). Other equipment headings remain navy (#073878). Client/existing-system groups use pale orange (#FFE5B5) and orange borders (#FF8800). Cable colours and their solid/dashed classifications remain unchanged in `data/cable_types.json`.
 
@@ -10,7 +10,7 @@ Use `layer_headers` to override display text, e.g. `{"control": {"name": "Contro
 
 Create a `kind: "group"` shape with a `layer`, then give its device shapes `parent: "group-id"`. Child shapes inherit the parent's layer. Groups may themselves have parents. The program fits children in a grid: `columns` (1–24) sets a group column count; zero-based `row` on children makes explicit rows. Children in the same explicit row share that row. Device pictures are enlarged to fill their share of the container (equal shares per row, aspect ratio preserved, about 90 % occupancy); see `equipment-sizing-rules.md`. Crowded layouts warn instead of silently hiding content. Parent cycles, missing parents, invalid options and conflicting layers stop the build.
 
-Root groups are arranged left-to-right. `width_weight` allocates relative width. A requested separate panel uses `placement: "beside"` on a root group in the control layer; it is placed to the right of main PLC equipment. This works for any separately requested panel. The builder never invents one. `solid: true` makes a group border solid, suitable for an I/O rack. `max_width` and `max_height` (inches) limit root block dimensions only when a compact box is explicitly requested; otherwise root blocks fill the layer space.
+Root groups are arranged left-to-right. `width_weight` allocates relative width. A requested separate panel uses `placement: "beside"` on a root group in the control layer; it is placed to the right of main PLC equipment. This works for any separately requested panel. The builder never invents one. `solid: true` makes a group border solid, suitable for an I/O rack box. **One common I/O box per PLC system:** put all racks of a system in one group (solid, e.g. `columns: 4`) and give no rack a box of its own; if a group holds only racks that receive field wiring, it becomes that common box automatically. Keep the PLC in a row above the I/O group. Fewer boxes: one SCADA container, one container per PLC system, one I/O box per system, one field-instrument group per PLC system; add further containers only for scope, panels, sites or security zones (a warning flags an unlabeled box that wraps only another box). `max_width` and `max_height` (inches) limit root block dimensions only when a compact box is explicitly requested; otherwise root blocks fill the layer space.
 
 Loose layer devices are automatically placed in a generated equipment group. Existing/external system summaries may be empty labelled groups: their labels are centred. Actual devices still require pictures. No component model, wiring or footer value is inferred from the style reference.
 
@@ -29,3 +29,10 @@ To show every individual device line, set `cable_detail: "individual"`. Per-line
 Three joined rectangular sections with shared blue borders and no gaps: logo/project/document metadata; Notes; Legend. The legend includes both scope swatches and the cable samples. Labels/headings are bold and metadata values regular. Client and a supplied End User share one entry; the bottom strip holds Document Name, Prepared by, Checked by, Approved by, and Size / Rev / Sheet. Missing supplied values use TBC; normal document/revision/sheet defaults remain supported. Text fitting enforces the 6 pt floor. The page remains A3 landscape.
 
 Picture transparency, the 2400 px cap, compact dashes and black-frame prevention from earlier versions are retained. `--preview` remains required for visual inspection. Automated checks exercise both this default and legacy layout compatibility. Native Visio display has not been verified for this release.
+
+
+## Cable clearance (1.6.0)
+- Between rows or side-by-side boxes that a cable runs between, the layout leaves a band wide enough for about 7 mm clearance from both borders (0.50 in rows, 0.45 in columns). A container whose devices are linked past a neighbour gets a clear band above and below its row. Layer gaps leave room for labels.
+- The router prefers 8 mm from devices (falling back to 4 mm, then the minimum), avoids running along box and layer borders, keeps a cable between two devices of one container inside that container, keeps clear of group titles, and separates parallel runs by about 4 mm where the band allows. Unavoidable crossings are drawn as hops.
+- Cable labels are placed away from crossings, devices, other labels and box/layer borders.
+- Devices are measured at their picture and caption (not the empty cell around them), so cables attach to the equipment.

@@ -45,11 +45,12 @@ Size is always A3. A value too long for its footer cell stops the build.
 `bacnet`, `hardwired`; the colour comes from `data/cable_types.json` and cannot be set here, so every diagram uses the same colours.
 The line is straight or has square corners. Optional `"via": [[x, y], ...]` forces it through points (same coordinates as shapes) to
 route round something. The legend lists the cable types used.
-In the default reference style, links across boxes attach to container borders. Field-to-I/O hardwired connections share one visible trunk per source group and target rack. Original logical endpoints remain recorded. Set top-level `cable_detail: "individual"` or per-line `individual: true` to restore individual wires. Manual route instructions also bypass grouping. Explicit group endpoints remain exactly as specified.
+**Daisy chain.** `{"chain": ["plc1", "rio1", "rio2", "rio3", "rio4"], "cable": "ethernet"}` expands to plc1-rio1, rio1-rio2, rio2-rio3, rio3-rio4 (other keys such as `label` are copied to each link). Only an explicit chain or from/to line connects equipment: pictures that merely sit next to each other are never connected. A rack in a common I/O box with no communication line produces a warning. For a star, wire each rack to the switch with from/to lines; for a redundant network, draw both supported paths.
+In the default reference style, links across boxes attach to container borders; add `"direct": true` to keep a link on its two devices (for example a PLC redundancy link). Field-to-I/O hardwired connections share one visible trunk per source group and target I/O box (one box holds all the racks of a PLC system). Original logical endpoints remain recorded. Set top-level `cable_detail: "individual"` or per-line `individual: true` to restore individual wires. Manual route instructions also bypass grouping. Explicit group endpoints remain exactly as specified.
 
 ## pictures (every device, instruments and third-party items included)
-Every device shows a picture, never a box with text. Give it `component` (a library id) or `image` (a PNG from the web; WebP/JPEG/GIF are converted
-if Pillow is installed) with `image_source`. **Instruments and field devices, third-party items and VM boxes are devices too and get pictures.**
+Every device shows a picture, never a box with text. Equipment is sourced **web first** (see [web-first-images.md](web-first-images.md)): give `image` (a PNG from the web; WebP/JPEG/GIF are converted
+if Pillow is installed) with `image_source` (the URL), `oem` and `model`; `component` then only supplies the caption and the offline fallback. Only the fixed categories (laptop, video wall, Ethernet switch, fibre patch panel) use `component` alone. **Instruments and field devices, third-party items and VM boxes are devices too and get pictures.**
 Approved fixed cutouts are embedded unchanged (see fixed-library.md). Other pictures are cleaned before they are drawn: a white or light-grey background becomes transparent (white *inside* the device is
 kept), it is trimmed and capped at 2400 px. Existing transparency is preserved. A device with no usable picture gets a generic device icon and a warning, never a plain box. Picture wrappers explicitly disable inherited fill, outline and shadow. Scope styling belongs on group containers, never on the device's picture.
 
@@ -69,6 +70,7 @@ With one row only, the ellipse is drawn below it (above it if there is no room).
 shapes) fix the ellipse yourself. Do not draw the ring as your own shape: use `rings`.
 
 ## What the program does when something is off
+- Notices (printed as `notice:`; not drawing defects): a library picture used as the offline fallback for a non-fixed device, and a web picture without `image_source`, `oem` or `model`. Pass them on to the user.
 - Stops (`NOT BUILT`): a line names an unknown shape or cable; a shape has no id, x or y; unknown component; unreadable file.
 - Repairs and warns: a shape outside the drawing area is moved in; a picture that is missing or not a PNG becomes a box; a label too
   long for its box is printed at 6 pt; two shapes overlapping; a line passing through a shape.

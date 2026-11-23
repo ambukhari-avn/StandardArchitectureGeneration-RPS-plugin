@@ -20,9 +20,13 @@ class Components:
         self.fixed_aliases = {}
         if os.path.exists(fixed_path):
             with open(fixed_path, encoding='utf-8') as fh:
-                fixed = json.load(fh)['components']
+                loaded = json.load(fh)['components']
+            # Only entries with "fixed": true are approved fixed images. Others in this file stay in the
+            # library as offline fallbacks (equipment is sourced from the web first).
+            fixed = [c for c in loaded if c.get('fixed')]
             self.fixed = {c['id']: c for c in fixed}
-            self.all = [c for c in self.all if c['id'] not in self.fixed] + fixed
+            loaded_ids = {c['id'] for c in loaded}
+            self.all = [c for c in self.all if c['id'] not in loaded_ids] + loaded
             for c in fixed:
                 for alias in [c['id'], c['label']] + c['aliases']:
                     self.fixed_aliases[self.normalise(alias)] = c['id']
