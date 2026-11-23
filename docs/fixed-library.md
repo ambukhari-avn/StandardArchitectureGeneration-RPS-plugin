@@ -1,6 +1,8 @@
 # Approved fixed equipment images
 
-Version 1.2.0 uses library images before web images. The seven approved cutouts
+Version 1.2.2 removes the GSM module, its aliases, image files and sample entry.
+
+Version 1.2.0 uses library images before web images. The six approved cutouts
 are indexed in `data/fixed_components.json`, alongside aliases and SHA-256 hashes.
 
 Version 1.2.1 replaces five entries with higher-resolution PNGs supplied on
@@ -9,7 +11,7 @@ Ethernet switch (2172 x 724), video-wall/display (1536 x 1024), and the alternat
 switch illustration (2172 x 724). These PNGs already have transparency and are
 stored byte-for-byte as supplied, without resizing, sharpening, background
 removal or alpha normalization. The display's maximum alpha is natively 254.
-The laptop and GSM images retain their previously approved versions.
+The laptop retains its previously approved version.
 `scripts/replace_fixed_images.py` records this explicit replacement workflow.
 
 | Component | Default use |
@@ -22,7 +24,7 @@ The laptop and GSM images retain their previously approved versions.
 | `gsm_module` | GSM module / GSM modem symbol |
 | `ethernet_switch_variant` | Alternate switch, only when requested |
 
-Eight attachments contained seven unique images: the last two were identical.
+The active library contains six unique images; duplicate switch attachments are stored once.
 Originals are retained in `data/fixed/originals/`. These are user-supplied
 illustrations, not identification of specific equipment brands or models.
 
@@ -31,7 +33,7 @@ connect. Edge-connected black backgrounds were removed, including around the
 laptop; enclosed black details remain. The video wall has no exterior backdrop
 to remove: the entire rectangle is screen content. Transparent margins were
 added. Lanczos enlargement and mild sharpening smooth small images without
-recovering missing details; the dark GSM symbol was brightened for legibility.
+recovering missing details.
 `scripts/import_fixed_images.py` records the reproducible offline workflow and
 is never run during drawing generation.
 

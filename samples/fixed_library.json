@@ -58,11 +58,6 @@
       "parent": "equipment"
     },
     {
-      "id": "gsm_module",
-      "component": "gsm_module",
-      "parent": "equipment"
-    },
-    {
       "id": "ethernet_switch_variant",
       "component": "ethernet_switch_variant",
       "parent": "equipment"

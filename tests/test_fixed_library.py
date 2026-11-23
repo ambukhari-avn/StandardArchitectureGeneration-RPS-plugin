@@ -25,8 +25,11 @@ class FixedLibraryTests(unittest.TestCase):
     def prepare(self, spec):
         return B.prepare(spec, self.c, Cables(), tempfile.gettempdir())
 
-    def test_seven_assets_have_transparency_and_approved_hashes(self):
-        self.assertEqual(len(self.c.fixed), 7)
+    def test_six_assets_have_transparency_and_approved_hashes(self):
+        self.assertEqual(len(self.c.fixed), 6)
+        self.assertNotIn('gsm_module', self.c.by_id)
+        self.assertIsNone(self.c.fixed_for('GSM module'))
+        self.assertIsNone(self.c.fixed_for('GSM modem'))
         for cid in self.c.fixed:
             p = self.c.picture_path(cid)
             with Image.open(p) as im:

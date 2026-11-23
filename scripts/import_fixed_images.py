@@ -17,7 +17,6 @@ ASSETS = [
     ('firewall', 'Firewall', 'ab7eaf00-c312-4d6b-82b1-c793b6d0e0ad', ['firewall']),
     ('laptop', 'Laptop', 'f7c69e82-6261-4e6e-bb1f-9c107a7c08fb', ['laptop', 'engineering laptop']),
     ('video_wall', 'Video wall', 'd7537bf4-8fa2-4f0f-be4c-d65394ce4f36', ['video wall', 'videowall']),
-    ('gsm_module', 'GSM module', '24b472f2-d9f4-429a-b856-97bfe304bae0', ['gsm module', 'gsm modem']),
     ('ethernet_switch_variant', 'Ethernet switch (alternate)', 'd0bb0e42-ab97-462c-a3d9-e8c3cd612e6b', ['ethernet switch alternate', 'alternate ethernet switch']),
 ]
 
@@ -50,9 +49,6 @@ def clean(source, cid):
     im = im.crop(bounds)
     alpha = im.getchannel('A')
     rgb = im.convert('RGB')
-    if cid == 'gsm_module':
-        # Supplied symbol peaks at 53/255. Lift the existing dark grey for legibility.
-        rgb = ImageEnhance.Brightness(rgb).enhance(3.2)
     rgb = ImageEnhance.Contrast(rgb).enhance(1.04)
     rgb.putalpha(alpha)
     # Interpolation smooths low-resolution edges; it cannot recover missing detail.
@@ -82,9 +78,9 @@ def main(folder):
                           fixed=True, aliases=aliases, source='User attachment, November 2026',
                           original_sha256=hashlib.sha256(raw).hexdigest(),
                           sha256=hashlib.sha256(output.read_bytes()).hexdigest(),
-                          processing='Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail.'))
+                          processing='Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening. No new detail.'))
     (ROOT / 'data' / 'fixed_components.json').write_text(json.dumps({'components':items}, indent=2)+'\n', encoding='utf-8')
-    print('Imported 7 unique fixed images; attachments 7 and 8 are duplicates.')
+    print('Imported 6 fixed images; duplicate attachments are stored once.')
 
 
 if __name__ == '__main__':

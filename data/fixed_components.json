@@ -84,7 +84,7 @@
       "source": "User attachment, November 2026",
       "original_sha256": "35950effd09f62f728a5e0accc48ecf51f1024a82bc7167c6e67e4333af99dfd",
       "sha256": "d5be56a8d77d2276b3506002548c0c85fd1b435a7afb6b5f85ab51085c3a70f7",
-      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening. No new detail."
     },
     {
       "id": "video_wall",
@@ -106,27 +106,6 @@
       "original_sha256": "feed45f528069729d87e586a325aa989ad2761f11421ed2cf4016c617e350c40",
       "sha256": "feed45f528069729d87e586a325aa989ad2761f11421ed2cf4016c617e350c40",
       "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly."
-    },
-    {
-      "id": "gsm_module",
-      "label": "GSM module",
-      "title": "GSM module",
-      "layer": "User-approved",
-      "brand": null,
-      "part_number": null,
-      "confidence": "User-supplied illustration; not model identification",
-      "picture": "fixed/gsm_module.png",
-      "duplicate_of": null,
-      "source_row": null,
-      "fixed": true,
-      "aliases": [
-        "gsm module",
-        "gsm modem"
-      ],
-      "source": "User attachment, November 2026",
-      "original_sha256": "661ea7aa5a7ef4359329b0273aba99b9f1a56272026deaf3bb9ef3b3e2cb7fea",
-      "sha256": "0de04ac96dc3a5154222de403c68e7f6c1f6d30c2872d4ce8fcb287d97494b70",
-      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening; GSM contrast lift. No new detail."
     },
     {
       "id": "ethernet_switch_variant",

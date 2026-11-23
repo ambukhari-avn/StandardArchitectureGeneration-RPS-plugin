@@ -39,7 +39,7 @@ def main(folder):
                          original_sha256=digest, sha256=digest,
                          processing='None. Original high-resolution PNG bytes and supplied alpha preserved exactly.')
     registry.write_text(json.dumps(data, indent=2) + '\n', encoding='utf-8')
-    print('Replaced five approved assets with original high-resolution PNGs. Laptop and GSM unchanged.')
+    print('Replaced five approved assets with original high-resolution PNGs. Laptop unchanged.')
 
 
 if __name__ == '__main__':
