@@ -7,7 +7,9 @@ from textfit import fit_size
 
 NAVY, BORDER = "#073878", "#27369B"
 LIGHT_BLUE, BODY, CLIENT, ORANGE = "#E4F3FF", "#F5FAFF", "#FFE5B5", "#FF8800"
+TAB_BLUE = "#001477"
 GAP, PAD, TITLE = .12, .18, .32
+LAYER_GAP = .26  # room for tabs above each layer without entering the preceding layer
 
 
 def apply_layers(spec, shapes, warnings, B):
@@ -121,7 +123,7 @@ def apply_layers(spec, shapes, warnings, B):
         roots = [s for s in shapes if s.get("layer") == t["id"] and not s.get("parent")]
         need = max([measure(s)[1] for s in roots] or [1.0]) + .32
         natural[t["id"]] = float(weights.get(t["id"], max(need, 3.8 if t["id"] == "control" else 1.0)))
-    available = B.AREA_H - GAP * (len(order) - 1)
+    available = B.AREA_H - LAYER_GAP * (len(order) - 1)
     total = sum(natural.values())
     panels, y = [], 0.0
     options = spec.get("layer_headers", {})
@@ -152,7 +154,7 @@ def apply_layers(spec, shapes, warnings, B):
             pw, ph = min(w, float(s.get("max_width") or w)), min(height, float(s.get("max_height") or height))
             place(s, x, y + PAD + (height - ph) / 2, pw, ph, rows, measure, warnings, B)
             x += w + GAP
-        y += h + GAP
+        y += h + LAYER_GAP
     for s in shapes:
         s["reference"] = True
         s["has_children"] = any(c.get("parent") == s["id"] for c in shapes)
@@ -247,15 +249,20 @@ def group_connections(spec, shapes, lines):
 
 def draw_layer(page, p, B):
     x, y, w, h = B.MARGIN + p["x"], B.TOP - p["y"] - p["h"], p["w"], p["h"]
-    page.rect("zone", x, y, B.BAND_W, h, fill=LIGHT_BLUE, line=BORDER, lw=1.5, rounding=.18, key="layer-heading:" + p["id"])
-    body_x = x + B.BAND_W + GAP
-    page.rect("zone", body_x, y, w - B.BAND_W - GAP, h, fill=BODY, line=BORDER, lw=1.5, rounding=.18, key="layer:" + p["id"])
+    # A single layer frame, with a navy tab straddling its top border.
+    # Keep the existing left equipment inset for the optional description.
+    page.rect("zone", x, y, w, h, fill=BODY, line=BORDER, lw=1.5, rounding=.04, key="layer:" + p["id"])
     label = p["name"]
-    size = fit_size(label, B.BAND_W - .32, min(.9, h - .2), (17, 16, 14, 12, 10, 9, 8), True)
-    desc_h = .40 if p.get("desc") else 0
-    page.text(x + .16, y + (h - .8 - desc_h) / 2 + desc_h, B.BAND_W - .32, .8, label,
-              size=size, bold=True, color=NAVY, halign=0, key="layer-name:" + p["id"])
+    tab_w = min(w - .24, max(1.7, min(3.15, .22 + len(label) * .11)))
+    tab_h, tab_y = .36, y + h - .18
+    size = fit_size(label, tab_w - .20, tab_h - .04, (14, 13, 12, 11, 10, 9, 8), True)
+    page.rect("zone", x + .13, tab_y, tab_w, tab_h, fill=TAB_BLUE, line=TAB_BLUE,
+              lw=1.5, rounding=.10, key="layer-heading:" + p["id"])
+    page.text(x + .23, tab_y + .02, tab_w - .20, tab_h - .04, label,
+              size=size, bold=True, color="#FFFFFF", key="layer-name:" + p["id"])
     if p.get("desc"):
-        page.text(x + .16, y + (h - .8 - desc_h) / 2, B.BAND_W - .32, desc_h, p["desc"],
-                  size=8, bold=True, halign=0, key="layer-desc:" + p["id"])
+        desc_h = min(.55, max(.20, h - .28))
+        desc_size = fit_size(p["desc"], B.BAND_W - .20, desc_h, (10, 9, 8, 7, 6), True)
+        page.text(x + .10, y + h - .23 - desc_h, B.BAND_W - .20, desc_h, p["desc"],
+                  size=desc_size, bold=True, halign=0, valign=2, key="layer-desc:" + p["id"])
     return size

@@ -1,4 +1,4 @@
-"""Three rounded footer cards matching the supplied November reference."""
+"""Joined rectangular title, notes and legend footer matching the latest reference."""
 import os
 import footer as F
 from reference_layout import NAVY, BORDER, BODY, CLIENT, ORANGE
@@ -10,11 +10,15 @@ def build(page, fields, legend, notes, allow_tbc, logo_path, logo_text, parent):
         raise F.FooterError("page must be A3 landscape")
     f = F._check_fields(fields, allow_tbc)
     F._check_legend(legend)
-    x, y, h, gap = F.X0, F.Y0, F.HEIGHT, .18
-    widths = (6.7, 4.35, F.X1 - F.X0 - 6.7 - 4.35 - 2 * gap)
+    x, y, h, gap = F.X0, F.Y0, F.HEIGHT, 0.
+    widths = (7.0, 4.5, F.X1 - F.X0 - 7.0 - 4.5)
+    page.rect("block", x, y, F.X1 - F.X0, h, parent, fill="#FFFFFF", line=BORDER,
+              lw=1.5, key="footer-frame")
     cards = []
     for name, w in zip(("title", "notes", "legend"), widths):
-        cards.append(page.rect("block", x, y, w, h, parent, fill="#FFFFFF", line=BORDER, lw=1.5, rounding=.13, key="footer-card:" + name))
+        if cards:
+            page.line([(x, y), (x, y + h)], BORDER, lw=1.5, parent=parent, key="footer-divider:" + name)
+        cards.append(page.rect("footer-section", x, y, w, h, parent, fill=None, line=None, key="footer-card:" + name))
         x += w + gap
     title, notes_id, legend_id = cards
     sizes = {}
@@ -30,7 +34,6 @@ def build(page, fields, legend, notes, allow_tbc, logo_path, logo_text, parent):
         page.image(F.X0 + (logo_w - pw) / 2 + .04, y + (h - ph) / 2, pw, ph, logo_path, title, key="logo")
     else:
         page.text(F.X0 + .06, y + .3, logo_w - .1, .45, logo_text, title, size=12, bold=True, color=NAVY)
-    page.line([(F.X0 + logo_w, y + .04), (F.X0 + logo_w, y + h - .04)], "#BDD8ED", lw=.5, parent=title, key="footer-logo-divider")
     text_w = widths[0] - 1.78
     # Metadata remains complete even though the reference omits End User.
     metadata = [("client", "Client", f["client"], .29),
@@ -73,7 +76,8 @@ def build(page, fields, legend, notes, allow_tbc, logo_path, logo_text, parent):
     page.text(lx + .12, y + h - .23, lw - .24, .18, "Legend", legend_id, size=8, bold=True, halign=0)
     # Scopes are part of the legend card rather than a fourth footer block.
     scope_w = min(1.7, lw * .44)
-    for i, (key, (label, fill)) in enumerate(F.SCOPE.items()):
+    for i, key in enumerate(("other", "avanceon")):
+        label, fill = F.SCOPE[key]
         sy = y + h - .47 - i * .25
         page.rect("icon", lx + .13, sy, .31, .18, legend_id, fill=fill,
                   line=ORANGE if key == "other" else BORDER, lw=1.2, rounding=.04, key="scope:" + key)

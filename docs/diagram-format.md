@@ -16,7 +16,7 @@ The drawing area is 15.9 in wide and 9.9 in high; the footer sits below it.
 
 ## project (footer)
 Only values the user or the RFQ gave. A missing value prints `TBC` (`doc_name`, `revision` and `sheet` default to `Architecture`, `R0` and `1`). The older keys `contractor` and `rev` (`R0/1`) are still read as `client` and `revision` + `sheet`.
-The footer has three rounded cards: logo/metadata, Notes, and Legend. **Avanceon Scope** (pale/white) and **Client Scope** (pale orange with an orange border) appear as swatches inside Legend. Client and a known End User share an entry; Size / Rev / Sheet share the bottom entry.
+The footer has three joined rectangular sections: logo/metadata, Notes, and Legend. **Avanceon Scope** (pale/white) and **Client Scope** (pale orange with an orange border) appear as swatches inside Legend. Client and a known End User share an entry; Size / Rev / Sheet share the bottom entry.
 Size is always A3. A value too long for its footer cell stops the build.
 
 ## shapes
@@ -55,7 +55,7 @@ kept), it is trimmed and capped at 2400 px. Existing transparency is preserved. 
 
 ## layers (Purdue bands)
 `"layers": ["scada", "control", "field"]` - the standard layers the drawing needs (any of 1 to 6 of: `enterprise`, `dmz`, `operations`,
-`scada`, `control`, `field`). Layers use standard order. Separate rounded light-blue heading cards and pale equipment panels have navy text and blue borders. Heights follow content; the PLC/control area gets a larger allowance. Small gaps separate layers. `layer_weights` overrides proportions, e.g. `{"scada":2,"control":5,"field":2}`. `layer_headers` overrides names/descriptions, e.g. `{"control":{"name":"Control System","description":"Redundant PLC"}}`.
+`scada`, `control`, `field`). Layers use standard order. White bold heading text sits on compact navy tabs overlapping each full-width layer frame. Descriptions sit immediately beneath the tab on the left. Heights follow content; the PLC/control area gets a larger allowance. Small gaps separate layers. `layer_weights` overrides proportions, e.g. `{"scada":2,"control":5,"field":2}`. `layer_headers` overrides names/descriptions, e.g. `{"control":{"name":"Control System","description":"Redundant PLC"}}`.
 Put a group in a layer with `"layer": "control"` and its devices in it with `parent`. Nested groups, columns and rows organise complex controls above I/O. Loose devices are boxed automatically. A separately requested panel is a control root group with `placement: "beside"`; it is never inserted automatically. See [reference-layout.md](reference-layout.md) for complete rules and `samples/reference_boxed.json` for a working example. Older equal-height placement is only available through `layout_style: "legacy"`.
 
 ## rings (fibre ring)
@@ -90,12 +90,12 @@ Manual instructions always win, per cable: `"from_side"` / `"to_side"` (`left`, 
 
 
 ## Look and feel (reference style)
-- Version 1.1.0 follows `reference-style.png` for headers, three-card footer, nested boxes and varied layer heights. Palette and hierarchy are detailed in [reference-layout.md](reference-layout.md). Cable colours are unchanged.
+- Version 1.1.0 follows `reference-style.png` for headers, joined rectangular footer, nested boxes and varied layer heights. Palette and hierarchy are detailed in [reference-layout.md](reference-layout.md). Cable colours are unchanged.
 - Internal dashed pattern `2` exports as Visio tiny-dash pattern `23` (see `reference-dashes.png`); PNG previews approximate it with 2.5 pt strokes / 1.25 pt gaps. Picture wrappers disable inherited fill, outline and shadow.
 - Match `docs/reference-style.png` for visual treatment, using the current project's equipment and topology. Cables and ring links are 1.75 pt, panel/layer boundaries 1.5 pt, outer border 2.25 pt. Preview rendering uses 200 dpi, bold fonts, proportional strokes, dashed containers and Lanczos picture resampling.
 - Picture cleanup keeps up to 2400 pixels, preserves existing alpha and device interior whites, and never upscales small pictures. Choose sharp manufacturer originals at 300 source pixels per displayed inch. Background removal is for uniform light product backdrops, not arbitrary scenes. Use `--preview` and inspect the image before delivery.
 - A blue frame surrounds the sheet; a bold blue **title** (`"title"` in the file, default the Document Name) sits in a strip above the layers.
-- Heading cards use project-relevant names (SCADA, Control System, Field Instruments by default), optionally overridden with layer_headers. Equipment boxes are adjacent to their heading cards.
+- Heading tabs use project-relevant names (SCADA, Control System, Field Instruments by default), optionally overridden with layer_headers. Equipment boxes sit inside the full-width layer frame with a left inset for descriptions.
 - Group scope `other` uses the pale-orange client/existing-system treatment. Avanceon groups use pale/white backgrounds. Footer swatches match them.
 - A group title is bold navy at the top, or centred for an empty system-summary group. Use solid frames for I/O racks.
 - Grouped instrument hardwiring is one black box-to-box trunk into each I/O rack; individual logical device connections are retained in source metadata.

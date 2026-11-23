@@ -1,11 +1,13 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
+Version 1.3.0 matches the new header/footer reference: compact navy heading tabs and one continuous rectangular footer with shared dividers.
+
 Version 1.2.2 removes the GSM module from the library, sample and packaged assets.
 
 Turns an engineer's prompt (optionally with an RFQ or BOQ attached) into an editable one-page A3 Visio `.vsdx`.
 Version 1.2.1 replaces five approved library pictures with the user's original high-resolution transparent PNGs, preserving their bytes and native detail exactly. The laptop keeps its existing approved version.
 The current library contains six [fixed equipment images](docs/fixed-library.md): Ethernet switch (plus alternate), fiber optic patch panel, firewall, Avanceon laptop and video wall. They are used before web pictures and embedded unchanged unless the prompt explicitly requests a replacement. User-approved local background removal and mild enhancement preserve the supplied designs; tiny originals still limit fine detail.
-Version 1.1.0 uses the latest [boxed reference layout](docs/reference-layout.md): rounded light-blue heading cards, content-sized layers with a larger PLC/control area, nested equipment groups, optional requested side panels, shared instrument-to-I/O wiring and a three-card footer. The existing cable colours are unchanged. Try `python scripts/build_diagram.py samples/reference_boxed.json --out out/Architecture.vsdx --preview`. Older layouts remain available with `layout_style: "legacy"`.
+Version 1.1.0 uses the latest [boxed reference layout](docs/reference-layout.md): navy tabs with white bold layer names, content-sized layers with a larger PLC/control area, nested equipment groups, optional requested side panels, shared instrument-to-I/O wiring and a joined rectangular footer. The existing cable colours are unchanged. Try `python scripts/build_diagram.py samples/reference_boxed.json --out out/Architecture.vsdx --preview`. Older layouts remain available with `layout_style: "legacy"`.
 ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. The **footer**, **cable colours**, and **approved image library** provide consistent defaults across diagrams. Fixed pictures change only when the prompt explicitly requests it.
 
 ## Install

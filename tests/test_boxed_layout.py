@@ -41,7 +41,17 @@ class BoxedLayoutTests(unittest.TestCase):
             self.assertLessEqual(s["y"] + s["h"], B.TOP + 1e-6)
         headings = [s for s in result["page"].shapes if (s["key"] or "").startswith("layer-heading:")]
         self.assertEqual(len(headings), 3)
-        self.assertTrue(all(s["fill"] == R.LIGHT_BLUE and s["rounding"] > 0 for s in headings))
+        self.assertTrue(all(s["fill"] == R.TAB_BLUE and s["rounding"] > 0 for s in headings))
+        for heading in headings:
+            layer = panels[heading['key'].split(':')[1]]
+            self.assertLess(heading['y'], layer['y'] + layer['h'])
+            self.assertGreater(heading['y'] + heading['h'], layer['y'] + layer['h'])
+        names = [s for s in result['page'].shapes if (s['key'] or '').startswith('layer-name:')]
+        self.assertTrue(all(s['color'] == '#FFFFFF' and s['bold'] for s in names))
+        ordered = sorted(panels.values(), key=lambda s: s['y'], reverse=True)
+        for upper, lower in zip(ordered, ordered[1:]):
+            tab = next(s for s in headings if s['key'].split(':')[1] == lower['key'].split(':')[1])
+            self.assertLess(tab['y'] + tab['h'], upper['y'])
 
     def test_nested_groups_keep_equipment_inside_parent_boxes(self):
         spec = self.sample()
@@ -152,16 +162,20 @@ class BoxedLayoutTests(unittest.TestCase):
         result = self.build(spec)
         self.assertEqual(sum(1 for s in result["page"].shapes if (s["key"] or "").startswith("layer:")), 6)
 
-    def test_footer_has_three_rounded_cards_with_complete_metadata(self):
+    def test_footer_has_three_joined_rectangular_sections_with_complete_metadata(self):
         page = Page()
         fields = dict(client="Client", end_user="End User", project="Project", doc_name="System Architecture", prepared_by="A", checked_by="B", approved_by="C", revision="R3", sheet="2")
         footer.build_footer(page, fields, Cables().legend(["ethernet", "fibre", "hardwired"]), ["Project note"])
         cards = [s for s in page.shapes if (s["key"] or "").startswith("footer-card:")]
         self.assertEqual(len(cards), 3)
-        self.assertTrue(all(s["rounding"] > 0 and s["line"] == R.BORDER for s in cards))
-        for i, a in enumerate(cards):
-            for b in cards[i + 1:]:
-                self.assertLess(a["x"] + a["w"], b["x"])
+        self.assertTrue(all(s["rounding"] == 0 and s["line"] is None for s in cards))
+        frame = next(s for s in page.shapes if s['key'] == 'footer-frame')
+        self.assertEqual((frame['line'], frame['rounding']), (R.BORDER, 0))
+        dividers = [s for s in page.shapes if (s['key'] or '').startswith('footer-divider:')]
+        self.assertEqual(len(dividers), 2)
+        self.assertTrue(all(s['lw'] == frame['lw'] for s in dividers))
+        for a, b in zip(cards, cards[1:]):
+            self.assertAlmostEqual(a["x"] + a["w"], b["x"])
         texts = [s["text"] for s in page.shapes]
         for text in ("Client / End User", "Project", "System Architecture", "A", "B", "C", "A3 - R3 / 2", "Notes", "Legend", "Avanceon Scope", "Client Scope"):
             self.assertIn(text, texts)

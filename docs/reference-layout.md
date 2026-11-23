@@ -1,10 +1,10 @@
-# Boxed reference layout (1.1.0)
+# Boxed reference layout (1.3.0)
 
-The current default follows `reference-style.png`. It uses navy headings (`#073878`), blue rounded borders (`#27369B`), light-blue heading cards (`#E4F3FF`) and pale equipment panels (`#F5FAFF`). Client/existing-system groups use pale orange (`#FFE5B5`) and orange borders (`#FF8800`). Cable colours and their solid/dashed classifications remain unchanged in `data/cable_types.json`.
+The current default follows `reference-style.png`. Bold white layer names sit on compact navy tabs (#001477) overlapping full-width pale layer frames (#F5FAFF) with blue borders (#27369B). Other equipment headings remain navy (#073878). Client/existing-system groups use pale orange (#FFE5B5) and orange borders (#FF8800). Cable colours and their solid/dashed classifications remain unchanged in `data/cable_types.json`.
 
 ## Layout and hierarchy
 
-Start from `samples/reference_boxed.json`. Set `layers` to required standard ids in any order; the builder uses standard top-to-bottom order. Each layer has a separate heading card and equipment panel, with a small clear gap between layers. Heights follow actual group rows and picture sizes. Control has a larger default allowance; `layer_weights` can tune it, for example `{"scada": 2, "control": 5, "field": 2}`. No layer is forced to equal another.
+Start from `samples/reference_boxed.json`. Set `layers` to required standard ids in any order; the builder uses standard top-to-bottom order. Each layer has one full-width frame and a heading tab across its top-left border. Optional descriptions sit immediately below the tab. A clear gap keeps each tab outside the preceding layer. Equipment keeps its left inset for descriptions. Heights follow actual group rows and picture sizes. Control has a larger default allowance; `layer_weights` can tune it, for example `{"scada": 2, "control": 5, "field": 2}`. No layer is forced to equal another.
 
 Use `layer_headers` to override display text, e.g. `{"control": {"name": "Control System", "description": "Redundant PLC"}}`. Default headings omit Purdue level numbers; include one in the name if requested.
 
@@ -26,6 +26,6 @@ To show every individual device line, set `cable_detail: "individual"`. Per-line
 
 ## Footer
 
-Three separate rounded cards: logo/project/document metadata; Notes; Legend. The legend includes both scope swatches and the cable samples. Labels/headings are bold and metadata values regular. Client and a supplied End User share one entry; the bottom strip holds Document Name, Prepared by, Checked by, Approved by, and Size / Rev / Sheet. Missing supplied values use TBC; normal document/revision/sheet defaults remain supported. Text fitting enforces the 6 pt floor. The page remains A3 landscape.
+Three joined rectangular sections with shared blue borders and no gaps: logo/project/document metadata; Notes; Legend. The legend includes both scope swatches and the cable samples. Labels/headings are bold and metadata values regular. Client and a supplied End User share one entry; the bottom strip holds Document Name, Prepared by, Checked by, Approved by, and Size / Rev / Sheet. Missing supplied values use TBC; normal document/revision/sheet defaults remain supported. Text fitting enforces the 6 pt floor. The page remains A3 landscape.
 
 Picture transparency, the 2400 px cap, compact dashes and black-frame prevention from earlier versions are retained. `--preview` remains required for visual inspection. Automated checks exercise both this default and legacy layout compatibility. Native Visio display has not been verified for this release.
