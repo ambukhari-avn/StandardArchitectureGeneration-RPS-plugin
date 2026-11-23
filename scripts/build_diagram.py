@@ -24,7 +24,7 @@ import reference_layout
 import cable_labels
 from cables import CableError, Cables
 from components import Components
-from draw import BOX_FILL, BOX_LINE, BOX_SIZES, LABEL_SIZES, LABEL_ZONE, draw_picture
+from draw import BOX_FILL, BOX_LINE, BOX_SIZES, LABEL_SIZES, LABEL_ZONE, draw_picture, visible_box
 from textfit import TextFitError, fit_size
 from vsdx_writer import A3_H, A3_W, FONT_FLOOR, Page, png_size, write_vsdx
 
@@ -34,6 +34,7 @@ TITLE_H, FRAME = 0.50, 0.12                          # title strip height; inset
 TOP, BOTTOM = A3_H - MARGIN - TITLE_H, footer.TOP + 0.12      # the drawing area runs between these page heights
 AREA_W, AREA_H = A3_W - 2 * MARGIN, TOP - BOTTOM
 DEFAULT_SIZE = {"box": (1.35, 1.25), "picture": (1.35, 1.25), "text": (1.50, 0.30)}   # every device is a picture with its caption underneath
+SMALL_EQUIPMENT = 0.80                                  # a displayed device narrower and shorter than this is reported as too small
 MIN_DEVICE_H = 0.60                                     # a device cell shorter than this cannot hold a picture and a caption
 GENERIC_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "icons", "generic_device.png")
 BEHIND = ("zone", "group")                              # drawn first, behind the lines and shapes
@@ -553,10 +554,22 @@ def draw_shape(page, s):
         except TextFitError:
             warn = "%s: label may not fit under its picture; shorten it or widen the shape (w)" % s["where"]
         first = len(page.shapes)
-        draw_picture(page, s["pic"], s["label"], x, y, w, h, s["key"], soft=True, sub=s.get("sub"), bold=True)
+        modern = bool(s.get("reference"))
+        draw_picture(page, s["pic"], s["label"], x, y, w, h, s["key"], soft=True, sub=s.get("sub"), bold=True,
+                     fill=reference_layout.FILL if modern else 1.0, visible=modern)
         image = page.shapes[first]
         iw, ih = png_size(s["pic"])
         dpi = min(iw / image["w"], ih / image["h"])
+        if modern:
+            l, t, r, b = visible_box(s["pic"])
+            shown = max((r - l) * image["w"], (b - t) * image["h"])
+            if shown < SMALL_EQUIPMENT:
+                small = "%s: equipment is only %.2f in across on the page; reduce what shares its row or give its layer more weight" % (s["where"], shown)
+                warn = (warn + "; " + small) if warn else small
+            if not s["web"] and dpi < 200:
+                quality = "%s: picture has %.0f pixels per displayed inch after enlargement; a sharper original would improve fine detail%s" % (
+                    s["where"], dpi, " (approved fixed image left unchanged)" if s["key"].startswith("component:") else "")
+                warn = (warn + "; " + quality) if warn else quality
         if s["web"] and dpi < 150:
             quality = "%s: picture has only %.0f pixels per displayed inch; obtain a higher-resolution original (300 recommended)" % (s["where"], dpi)
             warn = (warn + "; " + quality) if warn else quality

@@ -11,6 +11,10 @@ LIGHT_BLUE, BODY, CLIENT, ORANGE = "#E4F3FF", "#F5FAFF", "#FFE5B5", "#FF8800"
 TAB_BLUE = "#001477"
 GAP, PAD, TITLE = .12, .18, .32
 LAYER_GAP = .26  # room for tabs above each layer without entering the preceding layer
+CHANNEL = .16    # clear band between device rows for cable routing
+EDGE = .05       # clearance between the outer rows and the container border
+DEVICE_W = 1.35  # relative width weight of one device: every device in a row gets an equal share
+FILL = .90       # target occupancy of a device's image area in its limiting dimension (80-90 %)
 
 
 def apply_layers(spec, shapes, warnings, B):
@@ -108,13 +112,13 @@ def apply_layers(spec, shapes, warnings, B):
         return [members[i:i + cols] for i in range(0, len(members), cols)]
     def measure(s):
         if s["kind"] != "group":
-            return s["w"], s["h"]
+            return DEVICE_W, s["h"]  # natural size is only a weight: it is never a maximum
         rs = rows(s)
         if not rs:
-            return s["w"], max(.65, s["h"])
+            return s["w"], .75  # a system summary box needs little height
         dims = [[measure(c) for c in row] for row in rs]
         return (max(sum(w for w, h in row) + GAP * (len(row) - 1) for row in dims) + 2 * PAD,
-                sum(max(h for w, h in row) for row in dims) + GAP * (len(dims) - 1) + 2 * PAD + (TITLE if s["label"] else 0))
+                sum(max(h for w, h in row) for row in dims) + CHANNEL * (len(dims) - 1) + 2 * (PAD + EDGE) + (TITLE if s["label"] else 0))
     weights = spec.get("layer_weights", {})
     if not isinstance(weights, dict) or any(k not in wanted or B._num(v) is None or float(v) <= 0 for k, v in weights.items()):
         raise B.BuildError("layer_weights must map included layer ids to positive numbers")
@@ -122,8 +126,10 @@ def apply_layers(spec, shapes, warnings, B):
     natural = {}
     for t in order:
         roots = [s for s in shapes if s.get("layer") == t["id"] and not s.get("parent")]
+        # A layer's share follows what it must hold (rows of pictures, captions, titles), so large
+        # pictures get room and blank space is not reserved for an arbitrary layer proportion.
         need = max([measure(s)[1] for s in roots] or [1.0]) + .32
-        natural[t["id"]] = float(weights.get(t["id"], max(need, 3.8 if t["id"] == "control" else 1.0)))
+        natural[t["id"]] = float(weights.get(t["id"], max(need, .9)))
     available = B.AREA_H - LAYER_GAP * (len(order) - 1)
     total = sum(natural.values())
     panels, y = [], 0.0
@@ -163,6 +169,7 @@ def apply_layers(spec, shapes, warnings, B):
     for s in shapes:
         s["reference"] = True
         s["has_children"] = any(c.get("parent") == s["id"] for c in shapes)
+    equalise(shapes)
     return panels
 
 
@@ -174,35 +181,63 @@ def _group(gid, layer, label, members, B):
 
 
 def place(s, x, y, w, h, rows, measure, warnings, B):
+    """Place a container's children so they fill it. Default device sizes are only relative
+    weights: each row gets a share of the height and each device an equal share of the row
+    width (nested groups are weighted by the devices they hold)."""
     s.update(x=x, y=y, w=w, h=h)
     if s["kind"] != "group":
         return
     rs = rows(s)
     if not rs:
         return
-    padding, spacing = min(PAD, h * .08), min(GAP, h * .06)
+    padding = min(PAD, h * .08)
     title = min(TITLE, h * .18) if s["label"] else 0
     inner_w, inner_h = w - 2 * padding, h - 2 * padding - title
     dims = [[measure(c) for c in row] for row in rs]
-    natural_h = sum(max(ch for cw, ch in row) for row in dims) + GAP * (len(rs) - 1)
-    scale = min(1., (inner_h - spacing * (len(rs) + 1)) / max(.01, sum(max(ch for cw, ch in row) for row in dims)),
-                min((inner_w - GAP * (len(row) - 1)) / max(.01, sum(cw for cw, ch in row)) for row in dims))
-    if scale <= 0:
+    channel = min(CHANNEL, max(.04, inner_h / (4. * (len(rs) + 1))))
+    edge = min(EDGE, channel)
+    row_nat = [max(ch for cw, ch in row) for row in dims]
+    avail_h = inner_h - channel * (len(rs) - 1) - 2 * edge
+    if avail_h <= 0 or inner_w <= 0:
         raise B.BuildError("group %r cannot fit its contents on A3" % s["id"])
-    if scale < .65:
-        warnings.append("group %r is crowded; increase its layer weight or reduce equipment" % s["id"])
-    heights = [max(ch for cw, ch in row) * scale for row in dims]
-    # Leave connection channels above/below rows instead of stretching pictures.
-    row_gap = max(spacing, (inner_h - sum(heights)) / (len(rs) + 1))
-    cy = y + padding + title + row_gap
+    heights = [avail_h * n / sum(row_nat) for n in row_nat]
+    cy = y + padding + title + edge
     for row, sizes, rh in zip(rs, dims, heights):
-        extra = (inner_w - sum(cw * scale for cw, ch in sizes)) / (len(row) + 1)
-        cx = x + padding + extra
+        gap = min(GAP, inner_w * .02)
+        usable = inner_w - gap * (len(row) - 1)
+        total = sum(cw for cw, ch in sizes)
+        if usable / total < .65 * DEVICE_W or rh < .65 * min(ch for cw, ch in sizes):
+            warnings.append("group %r is crowded; increase its layer weight or reduce equipment" % s["id"])
+        cx = x + padding
         for c, (cw, ch) in zip(row, sizes):
-            cw, ch = cw * scale, ch * scale
-            place(c, cx, cy + (rh - ch) / 2, cw, ch, rows, measure, warnings, B)
-            cx += cw + extra
-        cy += rh + row_gap
+            cell_w = usable * cw / total
+            place(c, cx, cy, cell_w, rh, rows, measure, warnings, B)
+            cx += cell_w + gap
+        cy += rh + channel
+
+
+def equalise(shapes):
+    """Comparable devices share one displayed cell size: the smallest cell of their category
+    (same component or picture). Field instruments also share one height. Different equipment
+    types keep their natural proportions because each picture is fitted by aspect ratio."""
+    devices = [s for s in shapes if s["kind"] == "box" and s.get("reference")]
+    def apply(group, width=True):
+        ws, hs = min(d["w"] for d in group), min(d["h"] for d in group)
+        for d in group:
+            if width:
+                d["x"] += (d["w"] - ws) / 2
+                d["w"] = ws
+            d["y"] += (d["h"] - hs) / 2
+            d["h"] = hs
+    by_key = {}
+    for d in devices:
+        by_key.setdefault(d.get("key"), []).append(d)
+    for key, group in by_key.items():
+        if len(group) > 1 and key:
+            apply(group)
+    field = [d for d in devices if d.get("layer") == "field"]
+    if len(field) > 1:
+        apply(field, width=False)
 
 
 def group_connections(spec, shapes, lines):

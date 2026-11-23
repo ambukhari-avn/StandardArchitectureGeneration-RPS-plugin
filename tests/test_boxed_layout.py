@@ -31,7 +31,7 @@ class BoxedLayoutTests(unittest.TestCase):
 
     def test_default_proportions_and_all_layer_boxes_are_inside_page(self):
         result = self.build(self.sample())
-        self.assertEqual(result["warnings"], [])
+        self.assertEqual([w for w in result["warnings"] if "pixels per displayed inch" not in w], [])
         panels = {s["key"][6:]: s for s in result["page"].shapes if (s["key"] or "").startswith("layer:")}
         self.assertGreater(panels["control"]["h"], panels["scada"]["h"])
         self.assertGreater(panels["control"]["h"], panels["field"]["h"])
