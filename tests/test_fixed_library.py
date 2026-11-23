@@ -31,7 +31,9 @@ class FixedLibraryTests(unittest.TestCase):
             p = self.c.picture_path(cid)
             with Image.open(p) as im:
                 self.assertEqual(im.mode, 'RGBA')
-                self.assertEqual(im.getchannel('A').getextrema(), (0, 255))
+                low, high = im.getchannel('A').getextrema()
+                self.assertEqual(low, 0)
+                self.assertGreaterEqual(high, 254)  # supplied display has native alpha capped at 254
                 self.assertGreaterEqual(max(im.size), 600)
 
     def test_exact_label_aliases_choose_fixed_images_not_model_guesses(self):
