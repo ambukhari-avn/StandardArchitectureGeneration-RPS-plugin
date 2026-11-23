@@ -1,5 +1,7 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
+Version 1.3.1 fits root equipment blocks across the available page width with equal narrow margins. Descriptions use a shallow row above the blocks, and the layout reserves no blank left column.
+
 Version 1.3.0 matches the new header/footer reference: compact navy heading tabs and one continuous rectangular footer with shared dividers.
 
 Version 1.2.2 removes the GSM module from the library, sample and packaged assets.

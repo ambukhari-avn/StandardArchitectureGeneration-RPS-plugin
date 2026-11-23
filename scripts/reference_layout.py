@@ -143,8 +143,12 @@ def apply_layers(spec, shapes, warnings, B):
         if side and t["id"] != "control":
             raise B.BuildError('placement="beside" is for a requested panel in the control layer')
         roots = [s for s in roots if s not in side] + side
-        x = B.BAND_W + GAP + PAD
-        width, height = B.AREA_W - x - PAD, h - 2 * PAD
+        # Headers occupy a shallow row above equipment, never a full-height
+        # left column. Root blocks fill the page width between equal margins.
+        x = PAD
+        header = min(.60 if p['desc'] else .30, h * .42)
+        bottom_pad = min(PAD, h * .08)
+        width, height = B.AREA_W - 2 * PAD, h - header - bottom_pad
         shares = [float(s.get("width_weight") or (1 if s in side else 3 if side else 1)) for s in roots]
         if any(not math.isfinite(v) or v <= 0 for v in shares):
             raise B.BuildError("width_weight must be positive")
@@ -152,7 +156,7 @@ def apply_layers(spec, shapes, warnings, B):
         for s, share in zip(roots, shares):
             w = usable * share / sum(shares)
             pw, ph = min(w, float(s.get("max_width") or w)), min(height, float(s.get("max_height") or height))
-            place(s, x, y + PAD + (height - ph) / 2, pw, ph, rows, measure, warnings, B)
+            place(s, x, y + header + (height - ph) / 2, pw, ph, rows, measure, warnings, B)
             x += w + GAP
         y += h + LAYER_GAP
     for s in shapes:
@@ -250,7 +254,7 @@ def group_connections(spec, shapes, lines):
 def draw_layer(page, p, B):
     x, y, w, h = B.MARGIN + p["x"], B.TOP - p["y"] - p["h"], p["w"], p["h"]
     # A single layer frame, with a navy tab straddling its top border.
-    # Keep the existing left equipment inset for the optional description.
+    # Descriptions use a shallow header row; equipment fills the width below.
     page.rect("zone", x, y, w, h, fill=BODY, line=BORDER, lw=1.5, rounding=.04, key="layer:" + p["id"])
     label = p["name"]
     tab_w = min(w - .24, max(1.7, min(3.15, .22 + len(label) * .11)))
@@ -261,8 +265,8 @@ def draw_layer(page, p, B):
     page.text(x + .23, tab_y + .02, tab_w - .20, tab_h - .04, label,
               size=size, bold=True, color="#FFFFFF", key="layer-name:" + p["id"])
     if p.get("desc"):
-        desc_h = min(.55, max(.20, h - .28))
-        desc_size = fit_size(p["desc"], B.BAND_W - .20, desc_h, (10, 9, 8, 7, 6), True)
-        page.text(x + .10, y + h - .23 - desc_h, B.BAND_W - .20, desc_h, p["desc"],
+        desc_h = min(.28, h * .20)
+        desc_size = fit_size(p["desc"], w - 2 * PAD, desc_h, (10, 9, 8, 7, 6), True)
+        page.text(x + PAD, y + h - .23 - desc_h, w - 2 * PAD, desc_h, p["desc"],
                   size=desc_size, bold=True, halign=0, valign=2, key="layer-desc:" + p["id"])
     return size

@@ -5,7 +5,7 @@
   "layers": ["scada", "control", "field"],
   "layer_headers": {"control": {"name": "Control System", "description": "Redundant PLC"}},
   "shapes": [
-    {"id": "existing", "kind": "group", "label": "Existing SCADA", "layer": "scada", "scope": "other", "max_width": 5.0, "max_height": 0.75},
+    {"id": "existing", "kind": "group", "label": "Existing SCADA", "layer": "scada", "scope": "other"},
     {"id": "plc-panel", "kind": "group", "label": "", "layer": "control", "width_weight": 4, "columns": 2},
     {"id": "processors", "kind": "group", "label": "Redundant Control", "parent": "plc-panel", "row": 0, "columns": 3},
     {"id": "primary", "label": "Primary Processor", "component": "rack_plc", "parent": "processors"},

@@ -67,6 +67,18 @@ class BoxedLayoutTests(unittest.TestCase):
             self.assertLessEqual(s["x"] + s["w"], p["x"] + p["w"] + 1e-6)
             self.assertLessEqual(s["y"] + s["h"], p["y"] + p["h"] + 1e-6)
 
+    def test_root_blocks_fill_layer_width_without_a_left_heading_column(self):
+        spec = self.sample()
+        shapes, _, warnings = B.prepare(spec, B.Components(), Cables(), os.path.join(ROOT, 'samples'))
+        panels = B.apply_layers(spec, shapes, warnings)
+        for panel in panels:
+            roots = sorted([s for s in shapes if s.get('layer') == panel['id'] and not s.get('parent')], key=lambda s: s['x'])
+            self.assertAlmostEqual(roots[0]['x'], R.PAD)
+            self.assertAlmostEqual(roots[-1]['x'] + roots[-1]['w'], B.AREA_W - R.PAD)
+            for shape in roots:
+                self.assertGreaterEqual(shape['y'], panel['y'] + (.60 if panel['desc'] else .30) - 1e-6)
+                self.assertLessEqual(shape['y'] + shape['h'], panel['y'] + panel['h'] - min(R.PAD, panel['h'] * .08) + 1e-6)
+
     def test_shared_hardwire_preserves_six_connections_and_ends_at_box_edges(self):
         result = self.build(self.sample())
         logical = [c for c in result["logical_connections"] if c["a"].startswith("p") and c["a"] != "primary" and c["cable"] == "hardwired"]

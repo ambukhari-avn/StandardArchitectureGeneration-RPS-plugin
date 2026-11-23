@@ -1,16 +1,16 @@
-# Boxed reference layout (1.3.0)
+# Boxed reference layout (1.3.1)
 
 The current default follows `reference-style.png`. Bold white layer names sit on compact navy tabs (#001477) overlapping full-width pale layer frames (#F5FAFF) with blue borders (#27369B). Other equipment headings remain navy (#073878). Client/existing-system groups use pale orange (#FFE5B5) and orange borders (#FF8800). Cable colours and their solid/dashed classifications remain unchanged in `data/cable_types.json`.
 
 ## Layout and hierarchy
 
-Start from `samples/reference_boxed.json`. Set `layers` to required standard ids in any order; the builder uses standard top-to-bottom order. Each layer has one full-width frame and a heading tab across its top-left border. Optional descriptions sit immediately below the tab. A clear gap keeps each tab outside the preceding layer. Equipment keeps its left inset for descriptions. Heights follow actual group rows and picture sizes. Control has a larger default allowance; `layer_weights` can tune it, for example `{"scada": 2, "control": 5, "field": 2}`. No layer is forced to equal another.
+Start from `samples/reference_boxed.json`. Set `layers` to required standard ids in any order; the builder uses standard top-to-bottom order. Each layer has one full-width frame and a heading tab across its top-left border. Optional descriptions sit immediately below the tab. A clear gap keeps each tab outside the preceding layer. Equipment blocks span the full usable layer width with equal narrow side margins. Descriptions occupy a shallow row beneath the heading tab, above the blocks. Heights follow actual group rows and picture sizes. Control has a larger default allowance; `layer_weights` can tune it, for example `{"scada": 2, "control": 5, "field": 2}`. No layer is forced to equal another.
 
 Use `layer_headers` to override display text, e.g. `{"control": {"name": "Control System", "description": "Redundant PLC"}}`. Default headings omit Purdue level numbers; include one in the name if requested.
 
 Create a `kind: "group"` shape with a `layer`, then give its device shapes `parent: "group-id"`. Child shapes inherit the parent's layer. Groups may themselves have parents. The program fits children in a grid: `columns` (1–24) sets a group column count; zero-based `row` on children makes explicit rows. Children in the same explicit row share that row. Their sizes and proportions are retained where space allows; crowded layouts warn instead of silently hiding content. Parent cycles, missing parents, invalid options and conflicting layers stop the build.
 
-Root groups are arranged left-to-right. `width_weight` allocates relative width. A requested separate panel uses `placement: "beside"` on a root group in the control layer; it is placed to the right of main PLC equipment. This works for any separately requested panel. The builder never invents one. `solid: true` makes a group border solid, suitable for an I/O rack. `max_width` and `max_height` (inches) keep a root summary group compact within its allocated panel.
+Root groups are arranged left-to-right. `width_weight` allocates relative width. A requested separate panel uses `placement: "beside"` on a root group in the control layer; it is placed to the right of main PLC equipment. This works for any separately requested panel. The builder never invents one. `solid: true` makes a group border solid, suitable for an I/O rack. `max_width` and `max_height` (inches) limit root block dimensions only when a compact box is explicitly requested; otherwise root blocks fill the layer space.
 
 Loose layer devices are automatically placed in a generated equipment group. Existing/external system summaries may be empty labelled groups: their labels are centred. Actual devices still require pictures. No component model, wiring or footer value is inferred from the style reference.
 
