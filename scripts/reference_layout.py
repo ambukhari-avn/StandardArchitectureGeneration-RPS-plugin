@@ -3,6 +3,7 @@
 All geometry stays editable. This module never supplies cable colours.
 """
 import math
+from cable_labels import TYPICAL_LABEL
 from textfit import fit_size
 
 NAVY, BORDER = "#073878", "#27369B"
@@ -73,7 +74,7 @@ def apply_layers(spec, shapes, warnings, B):
                 target = b if b.get("layer") == "control" else a
                 if target["kind"] == "box":
                     parent = by_id.get(target.get("parent"))
-                    if not parent or not parent.get("solid"):
+                    if not parent or not parent.get("solid") or sum(s.get('parent') == parent['id'] and s['kind'] == 'box' for s in shapes) > 1:
                         racks.add(target["id"])
         for sid in sorted(racks):
             device = by_id[sid]
@@ -244,7 +245,7 @@ def group_connections(spec, shapes, lines):
             target = by_id[target["parent"]]
         key = (source["id"], target["id"], c["cable"])
         if key not in shared:
-            displayed = dict(c, a=key[0], b=key[1], source_connections=[])
+            displayed = dict(c, a=key[0], b=key[1], source_connections=[], representative=True, label=TYPICAL_LABEL)
             shared[key] = displayed
             out.append(displayed)
         shared[key]["source_connections"].append((c["a"], c["b"]))

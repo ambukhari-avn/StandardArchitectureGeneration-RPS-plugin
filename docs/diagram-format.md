@@ -99,3 +99,8 @@ Manual instructions always win, per cable: `"from_side"` / `"to_side"` (`left`, 
 - Group scope `other` uses the pale-orange client/existing-system treatment. Avanceon groups use pale/white backgrounds. Footer swatches match them.
 - A group title is bold navy at the top, or centred for an empty system-summary group. Use solid frames for I/O racks.
 - Grouped instrument hardwiring is one black box-to-box trunk into each I/O rack; individual logical device connections are retained in source metadata.
+
+
+## Mandatory engineering rules and cable labels
+
+Apply every rule in mandatory-drawing-rules.md before generating a specification. Lines support an optional label string for verified interface/redundancy identification. Representative field-to-rack hardwired connections receive the required typical-signal label and grouping note automatically. Labels are editable Visio text, placed clear of equipment, headings and cable intersections; if no clear position exists, the build stops so spacing or routing can be corrected. Existing physical interface types must still be verified from project evidence.

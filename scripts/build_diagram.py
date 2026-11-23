@@ -21,6 +21,7 @@ import footer
 import pictures
 import router
 import reference_layout
+import cable_labels
 from cables import CableError, Cables
 from components import Components
 from draw import BOX_FILL, BOX_LINE, BOX_SIZES, LABEL_SIZES, LABEL_ZONE, draw_picture
@@ -221,7 +222,7 @@ def prepare(spec, comps, cables, spec_dir):
                 warnings.append('%s: %s must be "left", "right", "top" or "bottom"; ignored' % (where, key))
             elif v is not None:
                 sides[key] = v
-        lines.append(dict(a=str(c.get("from")), b=str(c.get("to")), cable=c.get("cable"), via=via, where=where,
+        lines.append(dict(a=str(c.get("from")), b=str(c.get("to")), cable=c.get("cable"), via=via, where=where, label=str(c.get('label', '')).strip(),
                           straight=bool(c.get("straight")), individual=bool(c.get("individual")), **sides))
     if errors:
         raise BuildError("\n  ".join(["cannot draw this file:"] + errors))
@@ -601,6 +602,8 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     given_title = spec.get("title") or spec.get("project", {}).get("doc_name") or "Architecture"
     draw_frame_and_title(page, str(given_title).strip().upper())
     notes = [str(n) for n in spec.get("notes", [])]
+    if any(c.get('representative') for c in lines) and cable_labels.GROUPED_NOTE not in notes:
+        notes.append(cable_labels.GROUPED_NOTE)
     n_web = sum(1 for s in shapes if s["web"])
     if n_web and spec.get("layout_style") == "legacy":
         notes.append("%d picture(s) come from outside the component library; the source is in the shape data." % n_web)
@@ -630,7 +633,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     placed = draw_rings(page, rings, by_id, cables, shapes, warnings)      # ring ellipses sit behind the lines and shapes
     n_lines = 0
     obstacles = [rect_of(s) for s in shapes if s["kind"] not in SEE_THROUGH]
-    x0 = MARGIN + (BAND_W + 0.05 if panels else 0.0)
+    x0 = MARGIN + (BAND_W + 0.05 if panels and spec.get('layout_style') == 'legacy' else 0.0)
     wired = {}
     for c in lines:                                                         # hardwired: the end with most hardwired cables is the hub (I/O); arrows point into it
         if c["cable"] == "hardwired":
@@ -698,6 +701,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
         if w:
             warnings.append(w)
     warnings += ["shapes %r and %r overlap" % p for p in overlapping(shapes)]
+    cable_labels.draw(page, lines, paths, shapes, warnings, sys.modules[__name__])
     keep_on_page(page, n_footer, warnings)
     write_vsdx(page, out, base, title=str(spec.get("project", {}).get("project", "Architecture")))
     return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notes": notes, "page": page,

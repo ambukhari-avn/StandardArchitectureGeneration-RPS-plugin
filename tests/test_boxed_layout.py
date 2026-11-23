@@ -88,6 +88,9 @@ class BoxedLayoutTests(unittest.TestCase):
         self.assertEqual(shared[0]["b"], "io-box")
         self.assertEqual(len(shared[0]["source_connections"]), 6)
         self.assertEqual(result["lines"], 5)
+        self.assertEqual(shared[0]['label'], 'Typical Hardwired Signals \u2014 AI/DI/AO/DO')
+        self.assertTrue(any('multiple physical field connections' in n for n in result['notes']))
+        self.assertTrue(any(s['text'] == shared[0]['label'] for s in result['page'].shapes))
         page = result["page"]
         wire = next(s for s in page.shapes if (s["key"] or "").startswith("instruments->io-box|logical="))
         for point, key in ((wire["pts"][0], "shape:instruments"), (wire["pts"][-1], "shape:io-box")):
@@ -127,6 +130,17 @@ class BoxedLayoutTests(unittest.TestCase):
         result = self.build(spec)
         wire = next(c for c in result["display_connections"] if c.get("source_connections") == [("sw", "plc")])
         self.assertEqual((wire["a"], wire["b"]), ("__equipment_scada", "__equipment_control"))
+
+    def test_distinct_racks_inside_one_solid_panel_keep_distinct_boundaries(self):
+        spec = self.sample()
+        spec['shapes'].append({'id': 'io2', 'label': 'Second I/O Rack', 'parent': 'io-box', 'component': 'remote_i_o_drop'})
+        spec['lines'][5]['to'] = 'io2'
+        shapes, lines, warnings = B.prepare(spec, B.Components(), Cables(), os.path.join(ROOT, 'samples'))
+        B.apply_layers(spec, shapes, warnings)
+        display = R.group_connections(spec, shapes, lines)
+        trunks = [c for c in display if c.get('representative')]
+        self.assertEqual({c['b'] for c in trunks}, {'__rack_io', '__rack_io2'})
+        self.assertEqual(sorted(len(c['source_connections']) for c in trunks), [1, 5])
 
     def test_optional_panel_is_beside_control_and_never_added_unasked(self):
         spec = self.sample()

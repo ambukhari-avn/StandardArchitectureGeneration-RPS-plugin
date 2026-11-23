@@ -1,5 +1,7 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
+Version 1.4.0 adds the [mandatory drawing rules](docs/mandatory-drawing-rules.md), representative hardwire labels and explanatory notes. Technical topology review supplements structural checks. Previously fixed images, page fitting, header/footer styling, scope colours and cable colours are preserved.
+
 Version 1.3.1 fits root equipment blocks across the available page width with equal narrow margins. Descriptions use a shallow row above the blocks, and the layout reserves no blank left column.
 
 Version 1.3.0 matches the new header/footer reference: compact navy heading tabs and one continuous rectangular footer with shared dividers.
