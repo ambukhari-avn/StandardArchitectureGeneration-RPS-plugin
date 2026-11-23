@@ -4,6 +4,7 @@ A .vsdx is an OPC zip of XML. To stay inside what Visio accepts, the package ske
 content types) is taken from an existing Visio-made file passed as `base`; only the page contents, page size and
 core properties are replaced. The page is always A3 landscape - anything else is refused.
 """
+import math
 import re
 import struct
 import zipfile
@@ -12,6 +13,8 @@ from xml.sax.saxutils import escape
 
 A3_W, A3_H = 16.5354, 11.6929      # inches, A3 landscape (420 x 297 mm)
 FONT_FLOOR = 6.0                    # pt, legibility floor (configurable by callers that check against it)
+SHORT_DASH_PATTERN = 23             # Visio native tiny dashes; internal 2 means dashed
+DASH_PT, GAP_PT = 2.5, 1.25         # compact preview treatment, in points
 
 
 class Page:
@@ -23,7 +26,7 @@ class Page:
     def add(self, kind, role, x, y, w, h, parent=None, **kw):
         s = dict(id=len(self.shapes) + 1, kind=kind, role=role, x=x, y=y, w=w, h=h, parent=parent, fill=None,
                  line="#000000", lw=0.75, pattern=1, text="", size=6.5, bold=False, halign=1, valign=1, key=None,
-                 pts=None, arrow=False, color="#000000", italic=False)
+                 pts=None, rounding=0, text_angle=0, color="#000000", arrow=False)
         s.update(kw)
         self.shapes.append(s)
         return s["id"]
@@ -31,30 +34,28 @@ class Page:
     def rect(self, role, x, y, w, h, parent=None, **kw):
         return self.add("rect", role, x, y, w, h, parent, **kw)
 
+    def ellipse(self, role, x, y, w, h, parent=None, **kw):
+        """Ellipse inscribed in the w x h box (a real Visio ellipse, editable as one shape)."""
+        return self.add("ellipse", role, x, y, w, h, parent, **kw)
+
+    def poly(self, role, pts, parent=None, **kw):
+        """Closed filled polygon through pts."""
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        return self.add("poly", role, min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent, pts=pts, **kw)
+
     def text(self, x, y, w, h, text, parent=None, **kw):
         return self.add("rect", "text", x, y, w, h, parent, fill=None, line=None, text=text, **kw)
 
     def image(self, x, y, w, h, path, parent=None, **kw):
         """Place a PNG picture (stored once in the package, referenced by relationship)."""
         png_size(path)                              # fail now if it is not a PNG
-        return self.add("image", "icon", x, y, w, h, parent, image=path, **kw)
+        return self.add("image", "icon", x, y, w, h, parent, image=path, fill=None, line=None, **kw)
 
     def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None, arrow=False):
-        """A polyline. arrow=True puts an arrowhead at the last point (Visio arrow code 13, medium size)."""
+        """Polyline; arrow=True puts a filled arrowhead on the last point."""
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
         return self.add("line", "line", min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent,
-                        pts=pts, line=color, lw=lw, pattern=pattern, key=key, arrow=bool(arrow))
-
-    def polygon(self, pts, fill=None, line="#000000", pattern=1, lw=1.0, parent=None, key=None, text="", size=8, bold=False):
-        """A closed filled outline (used for the fibre-ring ellipse). The first point is repeated at the end when the list is open."""
-        pts = [tuple(p) for p in pts]
-        if len(pts) < 3:
-            raise ValueError("a polygon needs at least 3 points")
-        if pts[0] != pts[-1]:
-            pts.append(pts[0])
-        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-        return self.add("polygon", "shape", min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent, pts=pts, fill=fill, line=line,
-                        lw=lw, pattern=pattern, key=key, text=text, size=size, bold=bold)
+                        pts=pts, line=color, lw=lw, pattern=pattern, key=key, arrow=arrow)
 
 
 def _f(v):
@@ -77,10 +78,15 @@ def _image_shape_xml(s, rid):
          "<Cell N='LocPinX' V='%s' F='Width*0.5'/>" % _f(w / 2), "<Cell N='LocPinY' V='%s' F='Height*0.5'/>" % _f(h / 2),
          "<Cell N='ImgOffsetX' V='0' F='ImgWidth*0'/>", "<Cell N='ImgOffsetY' V='0' F='ImgHeight*0'/>",
          "<Cell N='ImgWidth' V='%s' F='Width*1'/>" % _f(w), "<Cell N='ImgHeight' V='%s' F='Height*1'/>" % _f(h)]
+    # Foreign bitmap frames must never inherit style 0's fill or outline. Those
+    # rectangles can otherwise show as black boxes through transparent PNGs.
+    c += ["<Cell N='FillPattern' V='0'/>", "<Cell N='LinePattern' V='0'/>",
+          "<Cell N='FillForegnd' V='#FFFFFF'/>", "<Cell N='FillBkgnd' V='#FFFFFF'/>",
+          "<Cell N='ShdwPattern' V='0'/>"]
     sec = ""
     if s["key"]:
         sec = "<Section N='User'><Row N='SourceKey'><Cell N='Value' V='%s' U='STR'/></Row></Section>" % escape(str(s["key"]), {"'": "&apos;"})
-    g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='0'/><Cell N='NoLine' V='0'/><Cell N='NoShow' V='0'/><Cell N='NoSnap' V='0'/>"
+    g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='1'/><Cell N='NoLine' V='1'/><Cell N='NoShow' V='0'/><Cell N='NoSnap' V='0'/>"
          "<Row T='MoveTo' IX='1'><Cell N='X' V='0'/><Cell N='Y' V='0'/></Row>"
          "<Row T='LineTo' IX='2'><Cell N='X' V='%s' F='Width*1'/><Cell N='Y' V='0'/></Row>"
          "<Row T='LineTo' IX='3'><Cell N='X' V='%s' F='Width*1'/><Cell N='Y' V='%s' F='Height*1'/></Row>"
@@ -100,37 +106,46 @@ def shape_xml(s, rid=None):
          "<Cell N='LocPinX' V='%s' F='Width*0.5'/>" % _f(w / 2), "<Cell N='LocPinY' V='%s' F='Height*0.5'/>" % _f(h / 2)]
     line = s["line"]
     filled = s["fill"] is not None and s["kind"] != "line"
-    c += ["<Cell N='LinePattern' V='%d'/>" % (0 if line is None else s["pattern"]),
-          "<Cell N='LineColor' V='%s'/>" % (line or "#000000"), "<Cell N='LineWeight' V='%s'/>" % _f(s["lw"] / 72)]
-    if s["kind"] == "line" and s.get("arrow"):
-        c += ["<Cell N='EndArrow' V='13'/>", "<Cell N='EndArrowSize' V='2'/>"]
-    c += ["<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
+    pattern = SHORT_DASH_PATTERN if s["pattern"] == 2 else s["pattern"]
+    c += ["<Cell N='LinePattern' V='%d'/>" % (0 if line is None else pattern),
+          "<Cell N='LineColor' V='%s'/>" % (line or "#000000"), "<Cell N='LineWeight' V='%s'/>" % _f(s["lw"] / 72),
+          "<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
+    if s.get("arrow"):
+        c += ["<Cell N='EndArrow' V='4'/>", "<Cell N='EndArrowSize' V='2'/>"]
     c += ["<Cell N='%s' V='0.02'/>" % n for n in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin")]
     c.append("<Cell N='VerticalAlign' V='%d'/>" % s["valign"])
-    if s.get("rot"):                            # text turned 90 degrees counter-clockwise (reads upwards): the text block is the shape turned on its side
-        c += ["<Cell N='TxtPinX' V='%s' F='Width*0.5'/>" % _f(w / 2), "<Cell N='TxtPinY' V='%s' F='Height*0.5'/>" % _f(h / 2),
-              "<Cell N='TxtWidth' V='%s' F='Height*1'/>" % _f(h), "<Cell N='TxtHeight' V='%s' F='Width*1'/>" % _f(w),
-              "<Cell N='TxtLocPinX' V='%s' F='TxtWidth*0.5'/>" % _f(h / 2), "<Cell N='TxtLocPinY' V='%s' F='TxtHeight*0.5'/>" % _f(w / 2),
-              "<Cell N='TxtAngle' V='1.5707963267949'/>"]
+    if s["rounding"]:
+        c.append("<Cell N='Rounding' V='%s'/>" % _f(s["rounding"]))
+    if s["text_angle"]:                         # text block turned by this many degrees (counter-clockwise), wrapped along the long side
+        tw, th = (h, w) if abs(s["text_angle"]) % 180 == 90 else (w, h)
+        c += ["<Cell N='TxtPinX' V='%s'/>" % _f(w / 2), "<Cell N='TxtPinY' V='%s'/>" % _f(h / 2),
+              "<Cell N='TxtWidth' V='%s'/>" % _f(tw), "<Cell N='TxtHeight' V='%s'/>" % _f(th),
+              "<Cell N='TxtLocPinX' V='%s'/>" % _f(tw / 2), "<Cell N='TxtLocPinY' V='%s'/>" % _f(th / 2),
+              "<Cell N='TxtAngle' V='%s'/>" % _f(math.radians(s["text_angle"]))]
     sec = ""                                    # section order matches Visio's own files: Character, Paragraph, User, Geometry
     if s["text"]:
         sec += ("<Section N='Character'><Row IX='0'><Cell N='Color' V='%s'/><Cell N='Style' V='%d'/>"
-                "<Cell N='Size' V='%s'/></Row></Section>" % (s.get("color") or "#000000", (1 if s["bold"] else 0) | (2 if s.get("italic") else 0),
-                                                              _f(s["size"] / 72)))
+                "<Cell N='Size' V='%s'/></Row></Section>" % (s["color"], 1 if s["bold"] else 0, _f(s["size"] / 72)))
         sec += "<Section N='Paragraph'><Row IX='0'><Cell N='HorzAlign' V='%d'/></Row></Section>" % s["halign"]
     if s["key"]:
         rows = "<Row N='SourceKey'><Cell N='Value' V='%s' U='STR'/></Row>" % escape(str(s["key"]), {"'": "&apos;"})
         sec += "<Section N='User'>%s</Section>" % rows
     g = ("<Section N='Geometry' IX='0'><Cell N='NoFill' V='%d'/><Cell N='NoLine' V='%d'/><Cell N='NoShow' V='0'/>"
          "<Cell N='NoSnap' V='0'/>" % (0 if filled else 1, 1 if line is None else 0))
-    if s["kind"] == "rect":
+    if s["kind"] == "ellipse":
+        g += ("<Row T='Ellipse' IX='1'><Cell N='X' V='%s' F='Width*0.5'/><Cell N='Y' V='%s' F='Height*0.5'/>"
+              "<Cell N='A' V='%s' F='Width*1'/><Cell N='B' V='%s' F='Height*0.5'/>"
+              "<Cell N='C' V='%s' F='Width*0.5'/><Cell N='D' V='%s' F='Height*1'/></Row>") % (
+                  _f(w / 2), _f(h / 2), _f(w), _f(h / 2), _f(w / 2), _f(h))
+    elif s["kind"] == "rect":
         rows = [("MoveTo", 0, 0, "", ""), ("LineTo", 1, 0, "Width*1", ""), ("LineTo", 1, 1, "Width*1", "Height*1"),
                 ("LineTo", 0, 1, "", "Height*1"), ("LineTo", 0, 0, "", "")]
         for i, (t, ax, ay, fx, fy) in enumerate(rows, 1):
             g += "<Row T='%s' IX='%d'><Cell N='X' V='%s'%s/><Cell N='Y' V='%s'%s/></Row>" % (
                 t, i, _f(ax * w), " F='%s'" % fx if fx else "", _f(ay * h), " F='%s'" % fy if fy else "")
-    else:                                       # polyline or polygon (a polygon repeats its first point at the end)
-        for i, (px, py) in enumerate(s["pts"], 1):
+    else:                                       # polyline (closed for a polygon)
+        pts = list(s["pts"]) + ([s["pts"][0]] if s["kind"] == "poly" else [])
+        for i, (px, py) in enumerate(pts, 1):
             g += "<Row T='%s' IX='%d'><Cell N='X' V='%s'/><Cell N='Y' V='%s'/></Row>" % (
                 "MoveTo" if i == 1 else "LineTo", i, _f(px - x), _f(py - y))
     g += "</Section>"
@@ -139,7 +154,7 @@ def shape_xml(s, rid=None):
         s["id"], "".join(c), sec, g, txt)
 
 
-def write_vsdx(page, out, base, title="Architecture", description=None):
+def write_vsdx(page, out, base, title="Architecture"):
     if abs(page.w - A3_W) > 0.01 or abs(page.h - A3_H) > 0.01:
         raise ValueError("page is %.3f x %.3f in; output must be A3 landscape (%.4f x %.4f)" % (page.w, page.h, A3_W, A3_H))
     images = {}                                 # source path -> (relationship id, media part name); each file stored once
@@ -158,7 +173,7 @@ def write_vsdx(page, out, base, title="Architecture", description=None):
                      'Target="../media/%s"/>' % v for v in images.values()) + "</Relationships>")
     core = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/'
             'package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>%s</dc:title>'
-            '%s</cp:coreProperties>' % (escape(title), "<dc:description>%s</dc:description>" % escape(description) if description else ""))
+            '</cp:coreProperties>' % escape(title))
     cx, cy = page.w / 2, page.h / 2
     view = lambda t: re.sub(r"ViewCenterY='[^']*'", "ViewCenterY='%s'" % cy, re.sub(r"ViewCenterX='[^']*'", "ViewCenterX='%s'" % cx, t))
     with zipfile.ZipFile(base) as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zo:
@@ -180,6 +195,7 @@ def write_vsdx(page, out, base, title="Architecture", description=None):
                 t = data.decode()
                 t = re.sub(r"(N='PageWidth' V=')[^']*", r"\g<1>%s" % page.w, t)
                 t = re.sub(r"(N='PageHeight' V=')[^']*", r"\g<1>%s" % page.h, t)
+                t = re.sub(r"(N='DrawingResizeType' V=')[^']*", r"\g<1>2", t)       # 2 = the page never resizes itself: it stays A3
                 data = view(t).encode()
             elif n == "visio/windows.xml":
                 data = view(data.decode()).encode()

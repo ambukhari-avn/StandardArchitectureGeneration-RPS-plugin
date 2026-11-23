@@ -1,13 +1,18 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
+Version 1.4.0 adds the [mandatory drawing rules](docs/mandatory-drawing-rules.md), representative hardwire labels and explanatory notes. Technical topology review supplements structural checks. Previously fixed images, page fitting, header/footer styling, scope colours and cable colours are preserved.
+
+Version 1.3.1 fits root equipment blocks across the available page width with equal narrow margins. Descriptions use a shallow row above the blocks, and the layout reserves no blank left column.
+
+Version 1.3.0 matches the new header/footer reference: compact navy heading tabs and one continuous rectangular footer with shared dividers.
+
+Version 1.2.2 removes the GSM module from the library, sample and packaged assets.
+
 Turns an engineer's prompt (optionally with an RFQ or BOQ attached) into an editable one-page A3 Visio `.vsdx`.
-The AI (ChatGPT or Claude) designs the diagram and writes a small JSON file that says **what exists, at which Purdue level, in whose scope
-and how it connects** (the v2 format, no coordinates, [docs/diagram-format-v2.md](docs/diagram-format-v2.md)); fixed code places and draws it.
-What is fixed, so every diagram the team makes looks the same (Avanceon "System Architecture Drawing Instructions"): the **footer** (title
-block, notes, scope and cable legends), the **cable styles**, one **band per Purdue level** used with a dark-blue vertical title strip in a sky-blue box, **grey / pink scope
-boxes** (Avanceon / Client-Other) and a **plugin version stamp**. Only what the prompt asks for is drawn: no switches, ring, DMZ or servers by
-default. Everything else (items, names, models, pictures, protocols) is the AI's. The older free-form coordinates file still builds
-(decisions D43, D44-D57).
+Version 1.2.1 replaces five approved library pictures with the user's original high-resolution transparent PNGs, preserving their bytes and native detail exactly. The laptop keeps its existing approved version.
+The current library contains six [fixed equipment images](docs/fixed-library.md): Ethernet switch (plus alternate), fiber optic patch panel, firewall, Avanceon laptop and video wall. They are used before web pictures and embedded unchanged unless the prompt explicitly requests a replacement. User-approved local background removal and mild enhancement preserve the supplied designs; tiny originals still limit fine detail.
+Version 1.1.0 uses the latest [boxed reference layout](docs/reference-layout.md): navy tabs with white bold layer names, content-sized layers with a larger PLC/control area, nested equipment groups, optional requested side panels, shared instrument-to-I/O wiring and a joined rectangular footer. The existing cable colours are unchanged. Try `python scripts/build_diagram.py samples/reference_boxed.json --out out/Architecture.vsdx --preview`. Older layouts remain available with `layout_style: "legacy"`.
+ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. The **footer**, **cable colours**, and **approved image library** provide consistent defaults across diagrams. Fixed pictures change only when the prompt explicitly requests it.
 
 ## Install
 - **ChatGPT:** create a custom GPT with `chatgpt-plugin/instructions.md` as its instructions and `arch_plugin.zip` plus the client's Word
@@ -20,7 +25,7 @@ default. Everything else (items, names, models, pictures, protocols) is the AI's
 
 ## Get the code on your laptop (clone)
 You need: [Git](https://git-scm.com/downloads), Python 3 (standard library only, no packages required; Pillow is optional, for converting
-WebP/JPEG pictures, for removing the white background of web pictures, and for the PNG preview), and access to the GitHub repo (ask the owner to add your GitHub account if it is private).
+WebP/JPEG pictures and for the PNG preview), and access to the GitHub repo (ask the owner to add your GitHub account if it is private).
 
 ```
 git clone https://github.com/ambukhari-avn/StandardArchitectureGeneration-RPS-plugin.git
@@ -30,7 +35,7 @@ python -m unittest discover -s tests
 python scripts/build_diagram.py samples/diagram_example.json --out Architecture_test.vsdx
 ```
 `main` is the released version (Claude installs from it); day-to-day work happens on `development` or a feature branch. The tests should
-pass (221 tests; 2 are skipped unless the environment variable `ARCH_BASE_VSDX` points at `base\base.vsdx`, which tests the file writer) and the last command should print `built` and create a file that opens in Visio.
+pass and the last command should print `built` and create an editable Visio file.
 
 To make a change: `git checkout -b feature/<what-you-change>`, edit, run the tests, commit, push the branch, and open a pull request into
 `development`. Release steps (raise the version, `make_package.py`, merge to `main`) are in [docs/handover.md](docs/handover.md).
@@ -40,27 +45,20 @@ To make a change: `git checkout -b feature/<what-you-change>`, edit, run the tes
 chatgpt-plugin/   instructions.md (paste into ChatGPT), make_package.py (builds arch_plugin.zip; also rewrites the Claude skill), README
 .claude-plugin/   Claude plugin + marketplace manifests;  skills/architecture-diagram/SKILL.md (generated from instructions.md)
 scripts/          Python standard library only:
-                  build_diagram.py   diagram.json -> .vsdx (the one command the AI runs); prints the build report
-                  compile_v2.py      v2 spec (meaning) -> free-form spec: validation, questions, placement, redundancy, rings
-                  levels.py          Purdue levels, header and scope colours
-                  find_component.py  look a component up in the library before searching the web
-                  imaging.py         removes the white background of web pictures (Pillow, optional)
+                  build_diagram.py   diagram.json -> .vsdx (the one command ChatGPT runs)
                   vsdx_writer, footer, footer_form, textfit, draw, cables, components   writing the page
                   import_dataset, xlsx_reader   refresh the component library from the dataset workbook (development)
                   dev_preview       PNG preview, needs Pillow (development)
-data/             cable_types.json, footer_form.json, level_hints.json, components.json + components_extra.json + icons/ (library pictures)
+data/             cable_types.json, footer_form.json, components.json + icons/ (library pictures)
 base/             avanceon_logo.png, base.vsdx (empty A3 page on a Visio-made package skeleton)
-samples/          diagram_example.json (free-form), diagram_example_v2.json (redundant PLCs), diagram_example_ring_v2.json (fibre ring)
-docs/             handover.md (start here), setup.md (ChatGPT and Claude setup), diagram-format-v2.md (the format the AI writes),
-                  diagram-format.md (the free-form format it compiles to), decisions.md, dataset-import-report.md
+samples/          diagram_example.json
+docs/             handover.md (start here), setup.md (ChatGPT and Claude setup), diagram-format.md (the JSON format), decisions.md, dataset-import-report.md
 tests/
 ```
 
 ## Try it
 ```
 python -m unittest discover -s tests
-python scripts\build_diagram.py samples\diagram_example.json --preview        (free-form file)
-python scripts\build_diagram.py samples\diagram_example_v2.json --preview     (v2 file: prints ADDED BY RULE / ASSUMED / PICTURES / WARNINGS)
-python scripts\find_component.py S7                                          (library lookup)
+python scripts\build_diagram.py samples\diagram_example.json --preview
 ```
 Output goes to `Downloads\out`. To make the zip for ChatGPT (this also regenerates the Claude skill): `python chatgpt-plugin\make_package.py`.

@@ -1,11 +1,11 @@
 {
-  "_note": "Cable types from the Avanceon 'System Architecture Drawing Instructions' document (current version, sections 1 and 3); it has priority over the older repo values (plan decision L3). Hardwired = black solid with an arrowhead, Ethernet = blue dashed, Modbus = red solid (label RTU / TCP on the line), Fibre optic = green dashed (closed loop only for a ring). BACnet purple solid is kept from the earlier standard (owner decision L2); the document does not list it. Legend wording follows the footer reference picture. pattern: 1 = solid, 2 = dashed. arrow: true draws an arrowhead at the 'to' end of every line of that type.",
+  "_note": "Cable standard (user decision, 12 Nov 2026): Hardwired instrument/control black solid; Ethernet blue dashed; Modbus red solid; Fiber optic green dashed; BACnet purple solid. pattern: 1 = solid, 2 = dashed. Legend wording is the user's 'Cable / interface' column.",
   "status": "client",
   "cables": [
-    {"id": "ethernet", "label": "Ethernet Cable",         "color": "#0000FF", "pattern": 2},
-    {"id": "fibre",    "label": "Fibre Optic Cable",      "color": "#00B000", "pattern": 2},
-    {"id": "modbus",   "label": "Modbus Cable",           "color": "#FF0000", "pattern": 1},
-    {"id": "bacnet",   "label": "BACnet Cable",           "color": "#7030A0", "pattern": 1},
-    {"id": "hardwired","label": "Hardwired (Inst Cable)", "color": "#000000", "pattern": 1, "arrow": true}
+    {"id": "ethernet", "label": "Ethernet",                     "color": "#0000FF", "pattern": 2},
+    {"id": "fibre",    "label": "Fiber optic",                  "color": "#00B000", "pattern": 2},
+    {"id": "modbus",   "label": "Modbus",                       "color": "#FF0000", "pattern": 1},
+    {"id": "bacnet",   "label": "BACnet",                       "color": "#7030A0", "pattern": 1},
+    {"id": "hardwired","label": "Hardwired instrument/control", "color": "#000000", "pattern": 1}
   ]
 }

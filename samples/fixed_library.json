@@ -1,0 +1,67 @@
+{
+  "title": "APPROVED EQUIPMENT IMAGE LIBRARY",
+  "project": {
+    "client": "Example Client",
+    "project": "Fixed equipment image library",
+    "doc_name": "Approved Equipment Images",
+    "prepared_by": "TBC",
+    "checked_by": "TBC",
+    "approved_by": "TBC",
+    "revision": "R0",
+    "sheet": "1",
+    "end_user": "Library preview"
+  },
+  "notes": [
+    "User-supplied images with locally processed backgrounds and mild enhancement.",
+    "Small source images limit fine detail. Fixed images change only on explicit request."
+  ],
+  "layers": [
+    "scada"
+  ],
+  "layer_headers": {
+    "scada": {
+      "name": "Equipment",
+      "description": "Fixed image library"
+    }
+  },
+  "shapes": [
+    {
+      "id": "equipment",
+      "kind": "group",
+      "layer": "scada",
+      "label": "Approved Equipment Images",
+      "columns": 4
+    },
+    {
+      "id": "ethernet_switch",
+      "component": "ethernet_switch",
+      "parent": "equipment"
+    },
+    {
+      "id": "fiber_optic_patch_panel",
+      "component": "fiber_optic_patch_panel",
+      "parent": "equipment"
+    },
+    {
+      "id": "firewall",
+      "component": "firewall",
+      "parent": "equipment"
+    },
+    {
+      "id": "laptop",
+      "component": "laptop",
+      "parent": "equipment"
+    },
+    {
+      "id": "video_wall",
+      "component": "video_wall",
+      "parent": "equipment"
+    },
+    {
+      "id": "ethernet_switch_variant",
+      "component": "ethernet_switch_variant",
+      "parent": "equipment"
+    }
+  ],
+  "lines": []
+}

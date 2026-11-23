@@ -1,0 +1,132 @@
+{
+  "components": [
+    {
+      "id": "ethernet_switch",
+      "label": "Ethernet switch",
+      "title": "Ethernet switch",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/ethernet_switch.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "ethernet switch",
+        "network switch",
+        "scada switch"
+      ],
+      "source": "User-approved high-resolution replacement, 2026-11-23",
+      "original_sha256": "2354aa8a4f544c49c1ced2db184626d58389e13c958c2d8c07e892b4203cd6f4",
+      "sha256": "2354aa8a4f544c49c1ced2db184626d58389e13c958c2d8c07e892b4203cd6f4",
+      "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly."
+    },
+    {
+      "id": "fiber_optic_patch_panel",
+      "label": "Fiber optic patch panel",
+      "title": "Fiber optic patch panel",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/fiber_optic_patch_panel.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "fiber optic patch panel",
+        "fibre optic patch panel",
+        "fo patch panel",
+        "fopp"
+      ],
+      "source": "User-approved high-resolution replacement, 2026-11-23",
+      "original_sha256": "6d4da769cf530395f45ca980241d84839b8d93f4570d10ffc32716649a889882",
+      "sha256": "6d4da769cf530395f45ca980241d84839b8d93f4570d10ffc32716649a889882",
+      "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly."
+    },
+    {
+      "id": "firewall",
+      "label": "Firewall",
+      "title": "Firewall",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/firewall.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "firewall"
+      ],
+      "source": "User-approved high-resolution replacement, 2026-11-23",
+      "original_sha256": "087d5c90e569a4f5362d0ad89a399bba881a5922624f1939c451400db5524353",
+      "sha256": "087d5c90e569a4f5362d0ad89a399bba881a5922624f1939c451400db5524353",
+      "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly."
+    },
+    {
+      "id": "laptop",
+      "label": "Laptop",
+      "title": "Laptop",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/laptop.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "laptop",
+        "engineering laptop"
+      ],
+      "source": "User attachment, November 2026",
+      "original_sha256": "35950effd09f62f728a5e0accc48ecf51f1024a82bc7167c6e67e4333af99dfd",
+      "sha256": "d5be56a8d77d2276b3506002548c0c85fd1b435a7afb6b5f85ab51085c3a70f7",
+      "processing": "Edge-connected black removal (video wall: retained screen content); Lanczos interpolation and mild sharpening. No new detail."
+    },
+    {
+      "id": "video_wall",
+      "label": "Video wall",
+      "title": "Video wall",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/video_wall.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "video wall",
+        "videowall"
+      ],
+      "source": "User-approved high-resolution replacement, 2026-11-23",
+      "original_sha256": "feed45f528069729d87e586a325aa989ad2761f11421ed2cf4016c617e350c40",
+      "sha256": "feed45f528069729d87e586a325aa989ad2761f11421ed2cf4016c617e350c40",
+      "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly."
+    },
+    {
+      "id": "ethernet_switch_variant",
+      "label": "Ethernet switch (alternate)",
+      "title": "Ethernet switch (alternate)",
+      "layer": "User-approved",
+      "brand": null,
+      "part_number": null,
+      "confidence": "User-supplied illustration; not model identification",
+      "picture": "fixed/ethernet_switch_variant.png",
+      "duplicate_of": null,
+      "source_row": null,
+      "fixed": true,
+      "aliases": [
+        "ethernet switch alternate",
+        "alternate ethernet switch"
+      ],
+      "source": "User-approved high-resolution replacement, 2026-11-23",
+      "original_sha256": "5853d4b2e55b14a8549739f039a80e0cc46406a48e046c1abba7b21b0bba6d2a",
+      "sha256": "5853d4b2e55b14a8549739f039a80e0cc46406a48e046c1abba7b21b0bba6d2a",
+      "processing": "None. Original high-resolution PNG bytes and supplied alpha preserved exactly."
+    }
+  ]
+}

@@ -1,37 +1,34 @@
 """Load the component dataset (data/components.json, produced by import_dataset.py). Standard library only."""
 import json
 import os
+import hashlib
+import re
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 DATA = os.path.join(ROOT, "data")
 
 
-EXTRAS_FILE = "components_extra.json"
-
-
 class Components:
-    def __init__(self, path=os.path.join(DATA, "components.json"), extras=True):
-        """The library: components.json, plus hand-added components from components_extra.json next to it when `extras` is true.
-        An id that appears in both files (or twice in one) raises ValueError; pictures are resolved relative to the data folder."""
+    def __init__(self, path=os.path.join(DATA, "components.json")):
         with open(path, encoding="utf-8") as fh:
             raw = json.load(fh)
         self.source = raw["source"]
         self._dir = os.path.dirname(os.path.abspath(path))
-        self.all = list(raw["components"])
+        self.all = raw["components"]
+        fixed_path = os.path.join(self._dir, 'fixed_components.json')
+        self.fixed = {}
+        self.fixed_aliases = {}
+        if os.path.exists(fixed_path):
+            with open(fixed_path, encoding='utf-8') as fh:
+                fixed = json.load(fh)['components']
+            self.fixed = {c['id']: c for c in fixed}
+            self.all = [c for c in self.all if c['id'] not in self.fixed] + fixed
+            for c in fixed:
+                for alias in [c['id'], c['label']] + c['aliases']:
+                    self.fixed_aliases[self.normalise(alias)] = c['id']
         self.by_id = {c["id"]: c for c in self.all}
         if len(self.by_id) != len(self.all):
             raise ValueError("duplicate component ids in %s" % path)
-        self.extra_ids = set()
-        extra_path = os.path.join(self._dir, EXTRAS_FILE)
-        if extras and os.path.exists(extra_path):
-            with open(extra_path, encoding="utf-8") as fh:
-                more = json.load(fh)["components"]
-            for c in more:
-                if c["id"] in self.by_id:
-                    raise ValueError("component id %r in %s is already used in %s" % (c["id"], EXTRAS_FILE, os.path.basename(path)))
-                self.by_id[c["id"]] = c
-                self.all.append(c)
-                self.extra_ids.add(c["id"])
         for c in self.all:
             if c["duplicate_of"] and c["duplicate_of"] not in self.by_id:
                 raise ValueError("%s: duplicate_of %r is not a component" % (c["id"], c["duplicate_of"]))
@@ -52,7 +49,21 @@ class Components:
         full = os.path.join(self._dir, p)
         if not os.path.exists(full):
             raise FileNotFoundError("picture for %s is listed but missing: %s" % (cid, full))
+        comp = self.get(cid)
+        if comp.get('fixed'):
+            with open(full, 'rb') as fh:
+                digest = hashlib.sha256(fh.read()).hexdigest()
+            if digest != comp['sha256']:
+                raise ValueError('Fixed image changed: %s. Restore the approved asset or explicitly update the library.' % cid)
         return full
+
+    @staticmethod
+    def normalise(value):
+        return re.sub(r'[^a-z0-9]+', ' ', str(value).lower()).strip()
+
+    def fixed_for(self, label):
+        """Exact category/alias matches only; never guess a manufacturer's model."""
+        return self.fixed_aliases.get(self.normalise(label))
 
     def layers(self):
         return sorted({c["layer"] for c in self.all})
