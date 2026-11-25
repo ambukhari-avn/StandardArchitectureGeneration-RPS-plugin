@@ -31,6 +31,7 @@ Size is always A3. A value too long for its footer cell stops the build.
 | `parent` | id of a containing group; inherits its layer, supports nested groups |
 | `columns`, `row` | group grid columns (1–24); optional zero-based explicit row on a child |
 | `placement`, `width_weight` | a requested separate control panel uses `placement: "beside"`; width_weight sets relative root-group width |
+| `frame` | groups only: `false` makes an invisible arrangement (equipment sits directly in the layer, no box, no title; a cable may not end on it; client scope always keeps its frame) |
 | `solid`, `max_width`, `max_height` | solid group outline for an I/O frame; maximum root summary dimensions in inches |
 | `component` | id from `data/components.json` or `data/fixed_components.json`; approved fixed images take priority and are embedded unchanged |
 | `image_override` | `true` only when the user explicitly requests replacing a fixed image; requires `image` and source attribution |
@@ -41,7 +42,7 @@ Size is always A3. A value too long for its footer cell stops the build.
 | `scope` | optional `avanceon` or `other`: fills a box or zone with the matching footer scope colour (an explicit `fill` wins; pictures are not coloured) |
 
 ## lines
-`{"from": "a", "to": "b", "cable": "ethernet"}` names devices or groups. `cable` is one of `ethernet`, `fibre`, `modbus`,
+`{"from": "a", "to": "b", "cable": "ethernet"}` names devices or groups. Optional `"arrows"`: `"none"`, `"end"` (at `to`) or `"both"` (bidirectional, e.g. a redundancy sync link); by default only hardwired signals get an arrow, at the I/O. `cable` is one of `ethernet`, `fibre`, `modbus`,
 `bacnet`, `hardwired`; the colour comes from `data/cable_types.json` and cannot be set here, so every diagram uses the same colours.
 The line is straight or has square corners. Optional `"via": [[x, y], ...]` forces it through points (same coordinates as shapes) to
 route round something. The legend lists the cable types used.

@@ -1,0 +1,130 @@
+{
+ "project": {
+  "client": "ACME Contracting",
+  "end_user": "City Water Authority",
+  "project": "Water Treatment Plant Upgrade",
+  "doc_name": "PLC & SCADA System Architecture",
+  "prepared_by": "AMB",
+  "revision": "R0"
+ },
+ "notes": [],
+ "title": "PLC & SCADA SYSTEM ARCHITECTURE",
+ "layers": [
+  "control",
+  "field"
+ ],
+ "layer_headers": {
+  "control": {
+   "name": "Control System"
+  },
+  "field": {
+   "name": "Field Instruments"
+  }
+ },
+ "shapes": [
+  {
+   "id": "G-FIELD",
+   "kind": "group",
+   "label": "Field Instruments",
+   "scope": "avanceon",
+   "layer": "field",
+   "columns": 3
+  },
+  {
+   "id": "EQ-001-1",
+   "parent": "G-FIELD",
+   "label": "Pressure Transmitters",
+   "sublabel": "(Qty 4)",
+   "component": "pressure_transmitter",
+   "image": "../pictures/pressure_transmitter.png",
+   "image_source": "Bundled example picture (stands in for a web-sourced manufacturer image)"
+  },
+  {
+   "id": "EQ-002-1",
+   "parent": "G-FIELD",
+   "label": "Temperature Transmitters",
+   "sublabel": "(Qty 3)",
+   "component": "temperature_transmitter_rtd_in_thermowell"
+  },
+  {
+   "id": "EQ-003-1",
+   "parent": "G-FIELD",
+   "label": "Flow Transmitters",
+   "sublabel": "(Qty 2)",
+   "component": "electromagnetic_flowmeter",
+   "image": "../pictures/flow_transmitter.png",
+   "image_source": "Bundled example picture (stands in for a web-sourced manufacturer image)"
+  },
+  {
+   "id": "G-control",
+   "kind": "group",
+   "label": "",
+   "scope": "avanceon",
+   "layer": "control",
+   "frame": false,
+   "columns": 4
+  },
+  {
+   "id": "EQ-004-1",
+   "parent": "G-control",
+   "label": "PLC",
+   "row": 1,
+   "component": "rack_plc"
+  },
+  {
+   "id": "EQ-005-1",
+   "parent": "G-control",
+   "label": "Remote I/O Rack",
+   "row": 2,
+   "component": "remote_i_o_drop"
+  },
+  {
+   "id": "EQ-006-1",
+   "parent": "G-control",
+   "label": "Industrial Ethernet Switch",
+   "row": 0,
+   "component": "ethernet_switch"
+  },
+  {
+   "id": "EQ-007-1",
+   "parent": "G-control",
+   "label": "HMI Panel",
+   "row": 1
+  }
+ ],
+ "lines": [
+  {
+   "cable": "hardwired",
+   "label": "Typical Hardwired Signals — AI/DI/AO/DO",
+   "from": "EQ-001-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "hardwired",
+   "label": "Typical Hardwired Signals — AI/DI/AO/DO",
+   "from": "EQ-002-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "hardwired",
+   "label": "Typical Hardwired Signals — AI/DI/AO/DO",
+   "from": "EQ-003-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-006-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-004-1",
+   "to": "EQ-006-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-007-1",
+   "to": "EQ-006-1"
+  }
+ ]
+}

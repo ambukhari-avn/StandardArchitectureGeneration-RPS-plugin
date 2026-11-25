@@ -50,7 +50,7 @@ The router keeps about 8 mm (at least 4 mm where space is tight) between cables 
 4. Include every major functional device required by the project.
 5. Use one consistent picture for the same equipment (same OEM and model); the fixed categories always use their approved library pictures.
 6. Add manufacturer/model captions only when specified. Library catalogue metadata does not authorize inventing a model.
-7. Draw few boxes: one SCADA container, one container per PLC system, one common I/O box per PLC system and one field-instrument group per PLC system. Add other boxes only for scope, panels, sites or security zones.
+7. Draw few boxes: Avanceon equipment sits directly in its layer; one container per PLC system only when there are several; one common I/O box only when several racks are drawn (a representative rack has no box); one field-instrument group. Add other boxes only for scope, panels, sites or security zones.
 8. Equipment pictures are sourced web first (see `web-first-images.md`); only the fixed categories keep the approved library pictures.
 9. Never invent equipment to fill space.
 

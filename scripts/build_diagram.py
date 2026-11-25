@@ -18,6 +18,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import footer
+import qa
 import pictures
 import router
 import reference_layout
@@ -237,7 +238,7 @@ def prepare(spec, comps, cables, spec_dir):
                            layer=layer, auto_x=auto_x, line=line, sub=sub, scope=scope if scope in footer.SCOPE else None,
                            parent=str(parent) if parent else None, row=s.get("row"), columns=s.get("columns"),
                            placement=s.get("placement"), width_weight=s.get("width_weight"), solid=bool(s.get("solid")),
-                           max_width=s.get("max_width"), max_height=s.get("max_height")))
+                           max_width=s.get("max_width"), max_height=s.get("max_height"), frame=_frame(s, kind, scope, where, warnings)))
     lines = []
     for n, c in enumerate(spec.get("lines", []), 1):
         where = "line %d" % n
@@ -247,6 +248,8 @@ def prepare(spec, comps, cables, spec_dir):
         for end in ("from", "to"):
             if str(c.get(end)) not in ids:
                 errors.append("%s: %s %r is not a shape id" % (where, end, c.get(end)))
+            elif any(x["id"] == str(c.get(end)) and not framed(x) for x in shapes):
+                errors.append("%s: %s %r is an invisible arrangement (frame: false); a cable must end on visible equipment or a box" % (where, end, c.get(end)))
         try:
             cables.get(c.get("cable"))
         except CableError as e:
@@ -268,8 +271,12 @@ def prepare(spec, comps, cables, spec_dir):
                 warnings.append('%s: %s must be "left", "right", "top" or "bottom"; ignored' % (where, key))
             elif v is not None:
                 sides[key] = v
+        arrows = c.get("arrows")
+        if arrows not in (None, "none", "end", "both"):
+            warnings.append('%s: arrows must be "none", "end" (at the destination) or "both"; ignored' % where)
+            arrows = None
         lines.append(dict(a=str(c.get("from")), b=str(c.get("to")), cable=c.get("cable"), via=via, where=where, label=str(c.get('label', '')).strip(),
-                          straight=bool(c.get("straight")), individual=bool(c.get("individual")), direct=bool(c.get("direct")), **sides))
+                          straight=bool(c.get("straight")), individual=bool(c.get("individual")), direct=bool(c.get("direct")), arrows=arrows, **sides))
     if errors:
         raise BuildError("\n  ".join(["cannot draw this file:"] + errors))
     return shapes, lines, warnings
@@ -601,9 +608,165 @@ def pill(page, x, y, w, h, text, solid, key):
               rounding=h / 2, text=text, size=size, bold=True, color="#FFFFFF" if solid else PILL_LIGHT_TEXT, key=key)
 
 
+def _frame(s, kind, scope, where, warnings):
+    """A group is a visible box unless "frame": false makes it an invisible arrangement (7.4: no box around equipment
+    that needs none). Client/existing scope must stay visible, so such a group keeps its frame."""
+    f = s.get("frame", True)
+    if not isinstance(f, bool):
+        warnings.append("%s: frame must be true or false; a frame is drawn" % where)
+        return True
+    if not f and kind != "group":
+        return True
+    if not f and scope == "other":
+        warnings.append("%s: a client/existing-scope group keeps its frame so the scope colour stays visible" % where)
+        return True
+    return f
+
+
+def _square(pts, jog=0.02):
+    """8.2: remove sub-millimetre slants left by routing so every segment is exactly horizontal or vertical."""
+    pts = [tuple(p) for p in pts]
+    for i in range(1, len(pts)):
+        (x0, y0), (x1, y1) = pts[i - 1], pts[i]
+        dx, dy = abs(x1 - x0), abs(y1 - y0)
+        if 0 < dy < jog and dx > dy:
+            if i < len(pts) - 1:
+                pts[i] = (x1, y0)
+            else:
+                pts[i - 1] = (x0, y1)
+        elif 0 < dx < jog and dy > dx:
+            if i < len(pts) - 1:
+                pts[i] = (x0, y1)
+            else:
+                pts[i - 1] = (x1, y0)
+    return pts
+
+
+def separate(lines, paths, rect_of_id, obstacles, gap=0.08, run=0.2):
+    """8.3 / 8.6: where two different cables share (almost) the same track, move one of them onto its own parallel track `gap`
+    away, keeping every segment orthogonal, its ends on their equipment and clear of other equipment. The hardwired bus into an
+    I/O box is shared deliberately and left alone. Returns the adjusted paths."""
+    paths = [list(map(tuple, p)) for p in paths]
+
+    def segs():
+        out = []
+        for n, pts in enumerate(paths):
+            for i, ((x0, y0), (x1, y1)) in enumerate(zip(pts, pts[1:])):
+                if abs(y0 - y1) < 1e-6 and abs(x1 - x0) > run:
+                    out.append((n, i, "h", y0, min(x0, x1), max(x0, x1)))
+                elif abs(x0 - x1) < 1e-6 and abs(y1 - y0) > run:
+                    out.append((n, i, "v", x0, min(y0, y1), max(y0, y1)))
+        return out
+
+    def clash(n, i, axis, pos, lo, hi):
+        for a in segs():
+            if a[0] != n and a[2] == axis and abs(a[3] - pos) < gap * .75 and min(a[5], hi) - max(a[4], lo) > .02:
+                return True
+        return False
+
+    def endpoint_ok(n, pts):
+        a, b = rect_of_id(lines[n]["a"]), rect_of_id(lines[n]["b"])
+        def on(pt, r):
+            x, y, w, h = r
+            return x - .03 <= pt[0] <= x + w + .03 and y - .03 <= pt[1] <= y + h + .03
+        return (on(pts[0], a) and on(pts[-1], b)) or (on(pts[0], b) and on(pts[-1], a))
+
+    for _ in range(30):
+        moved = False
+        ss = segs()
+        for k, a in enumerate(ss):
+            for b in ss[k + 1:]:
+                if a[0] == b[0] or a[2] != b[2] or abs(a[3] - b[3]) >= gap * .75:
+                    continue
+                if min(a[5], b[5]) - max(a[4], b[4]) <= run:
+                    continue
+                if lines[a[0]].get("cable") == lines[b[0]].get("cable") == "hardwired":
+                    continue
+                n, i, axis, pos = b[0], b[1], b[2], b[3]
+                for delta in (gap, -gap, 2 * gap, -2 * gap, 3 * gap, -3 * gap):
+                    pts = list(paths[n])
+                    p0, p1 = pts[i], pts[i + 1]
+                    if axis == "h":
+                        pts[i], pts[i + 1] = (p0[0], p0[1] + delta), (p1[0], p1[1] + delta)
+                    else:
+                        pts[i], pts[i + 1] = (p0[0] + delta, p0[1]), (p1[0] + delta, p1[1])
+                    # keep the neighbours orthogonal: a first/last segment slides its end along the equipment edge
+                    if not endpoint_ok(n, pts):
+                        continue
+                    own = (rect_of_id(lines[n]["a"]), rect_of_id(lines[n]["b"]))
+                    if any(crosses(pts, r) for r in obstacles if r not in own):
+                        continue
+                    if clash(n, i, axis, pos + delta, min(p0[1 if axis == "v" else 0], p1[1 if axis == "v" else 0]),
+                             max(p0[1 if axis == "v" else 0], p1[1 if axis == "v" else 0])):
+                        continue
+                    paths[n] = pts
+                    moved = True
+                    break
+                if moved:
+                    break
+            if moved:
+                break
+        if not moved:
+            break
+    # Cables ending on the same point of a device read as a junction: slide one end along the device edge.
+    for _ in range(30):
+        moved = False
+        ends = [(n, j) for n, p in enumerate(paths) if len(p) >= 2 for j in (0, len(p) - 1)]
+        for k, (n, j) in enumerate(ends):
+            for m, jj in ends[k + 1:]:
+                p, q = paths[n][j], paths[m][jj]
+                if n == m or abs(p[0] - q[0]) >= .05 or abs(p[1] - q[1]) >= .05:
+                    continue
+                if lines[n].get("cable") == lines[m].get("cable") == "hardwired":
+                    continue
+                pts = list(paths[m])
+                i = 0 if jj == 0 else len(pts) - 2                     # the end segment
+                (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+                horizontal = abs(y0 - y1) < 1e-6
+                for delta in (gap, -gap, 2 * gap, -2 * gap, 3 * gap, -3 * gap):
+                    trial = list(pts)
+                    if horizontal:
+                        trial[i], trial[i + 1] = (x0, y0 + delta), (x1, y1 + delta)
+                    else:
+                        trial[i], trial[i + 1] = (x0 + delta, y0), (x1 + delta, y1)
+                    if not endpoint_ok(m, trial):                         # (a straight cable slides both ends and stays straight)
+                        continue
+                    own = (rect_of_id(lines[m]["a"]), rect_of_id(lines[m]["b"]))
+                    if any(crosses(trial, r) for r in obstacles if r not in own):
+                        continue
+                    others = [e for o, pp in enumerate(paths) if o != m for e in (pp[0], pp[-1])]
+                    if any(abs(e[0] - t[0]) < .05 and abs(e[1] - t[1]) < .05 for e in others for t in (trial[0], trial[-1])):
+                        continue
+                    paths[m] = trial
+                    moved = True
+                    break
+                if moved:
+                    break
+            if moved:
+                break
+        if not moved:
+            break
+    return paths
+
+
+def _on(pt, r, tol=0.03):
+    """True when point pt lies on (or just at) the border of rectangle r = (x, y, w, h)."""
+    x, y, w, h = r
+    px, py = pt
+    inside = x - tol <= px <= x + w + tol and y - tol <= py <= y + h + tol
+    near = min(abs(px - x), abs(px - x - w), abs(py - y), abs(py - y - h)) <= tol
+    return inside and near
+
+
+def framed(s):
+    return s["kind"] != "group" or s.get("frame", True) is not False
+
+
 def draw_shape(page, s):
     x, y, w, h = rect_of(s)
     warn = None
+    if s["kind"] == "group" and not framed(s):
+        return None                                                 # an invisible arrangement: its equipment sits directly in the layer
     if s["kind"] == "zone":
         page.rect("zone", x, y, w, h, fill=s["fill"] or ZONE_FILL, line=BLUE, lw=1.5, pattern=2 if s["dashed"] else 1, key=s["key"])
         if s["label"]:
@@ -679,7 +842,7 @@ def keep_on_page(page, first_content, warnings):
     return moved
 
 
-def build(spec, base, out, comps=None, cables=None, spec_dir="."):
+def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template=True):
     comps, cables = comps or Components(), cables or Cables()
     shapes, lines, warnings = prepare(spec, comps, cables, spec_dir)
     panels = apply_layers(spec, shapes, warnings)
@@ -737,7 +900,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
         group_indices = [i for i, c in enumerate(lines) if by_id[c["a"]]["kind"] == "group" or by_id[c["b"]]["kind"] == "group"]
         normal_indices = [i for i in range(len(lines)) if i not in group_indices]
         routed = [None] * len(lines)
-        boxes = [rect_of(s) for s in shapes if s["kind"] in ("group", "zone")] + [(MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]) for p in panels]
+        boxes = [rect_of(s) for s in shapes if s["kind"] in ("group", "zone") and framed(s)] + [(MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]) for p in panels]
         def common_box(c):                                              # innermost group holding both ends: a cable between them stays inside it
             def chain(i):
                 out, s = [], by_id[i]
@@ -747,7 +910,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
                 return out
             up_a, up_b = chain(c["a"]), set(chain(c["b"]))
             for gid in up_a:
-                if gid in up_b:
+                if gid in up_b and framed(by_id[gid]):
                     return rect_of(by_id[gid])
             return None
         for i, c in enumerate(lines):
@@ -755,7 +918,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
                 reqs[i]["home"] = common_box(c)
         keepout = []                                                    # group titles are text a cable must not run through
         for s in shapes:
-            if s["kind"] == "group" and s["label"] and s.get("has_children"):
+            if s["kind"] == "group" and s["label"] and s.get("has_children") and framed(s):
                 gx, gy, gw, gh = rect_of(s)
                 tw = min(gw - .2, len(s["label"]) * .085 + .3)
                 keepout.append((gx + (gw - tw) / 2, gy + gh - .36, tw, .32))
@@ -790,15 +953,26 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
             if not c["via"]:
                 warnings.append("%s (%s to %s): no clear square route found; a plain one was drawn" % (c["where"], c["a"], c["b"]))
         paths.append(pts)
+    paths = [_square(p) for p in paths]
+    if spec.get("layout_style", "reference") == "reference":
+        paths = separate(lines, paths, lambda i: rect_of(by_id[i]), obstacles)
+    drawn_paths = []
     for c, pts in zip(lines, router.add_hops(paths)):
         color, pattern = cables.line_style(c["cable"])
-        arrow = c.get("hub") is not None
-        if arrow and c["hub"] == c["a"]:
+        # 8.4 arrowheads: hardwired signals point into the I/O (their destination); a line may ask for "end" (at its
+        # "to" device) or "both" (bidirectional, e.g. a redundancy sync link); Ethernet and other network links have none.
+        arrows = c.get("arrows")
+        arrow = c.get("hub") is not None if arrows is None else arrows in ("end", "both")
+        start = arrows == "both"
+        if arrows is None and arrow and c["hub"] == c["a"]:
             pts = pts[::-1]                                                 # the arrowhead is on the last point: make that the hub end
+        elif arrows == "end" and pts and rect_of(by_id[c["a"]]) and _on(pts[-1], rect_of(by_id[c["a"]])) and not _on(pts[-1], rect_of(by_id[c["b"]])):
+            pts = pts[::-1]
         key = "%s->%s" % (c["a"], c["b"])
         if c.get("source_connections"):
             key += "|logical=" + ",".join("%s->%s" % pair for pair in c["source_connections"])
-        page.line(pts, color, pattern, lw=CABLE_LW, key=key, arrow=arrow)
+        page.line(pts, color, pattern, lw=CABLE_LW, key=key, arrow=arrow, arrow_start=start)
+        drawn_paths.append(pts)
         n_lines += 1
     for c, pts in zip(lines, paths):
         if c["via"]:                                                        # a hand-routed cable may run through a device: say so
@@ -813,9 +987,22 @@ def build(spec, base, out, comps=None, cables=None, spec_dir="."):
     warnings += ["shapes %r and %r overlap" % p for p in overlapping(shapes)]
     cable_labels.draw(page, lines, paths, shapes, warnings, sys.modules[__name__])
     keep_on_page(page, n_footer, warnings)
+    defects = []
+    if spec.get("layout_style", "reference") == "reference":           # Phases 8, 9 and 11-E: automatic drawing checks
+        defects += qa.check_cables(lines, drawn_paths, lambda i: rect_of(by_id[i]))
+        defects += qa.check_cable_spacing(lines, paths)
+        defects += qa.check_attachments(lines, paths)
+        defects += qa.check_headings(page, panels)
+        defects += qa.check_containers(shapes)
+        defects += qa.check_text(page, BOTTOM)
+        defects += qa.check_page(page)
+        if check_template:
+            locked = qa.check_template(page)
+            if locked:
+                raise BuildError("the approved header/footer template must not change:\n  " + "\n  ".join(locked))
     write_vsdx(page, out, base, title=str(spec.get("project", {}).get("project", "Architecture")))
     return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notices": list(getattr(warnings, "notices", [])), "notes": notes, "page": page,
-            "logical_connections": logical_connections, "display_connections": lines}
+            "logical_connections": logical_connections, "display_connections": lines, "qa": defects}
 
 
 def load_json(path):
@@ -845,6 +1032,9 @@ if __name__ == "__main__":
         print("  warning:", w)
     for w in r["notices"]:
         print("  notice:", w)
+    for d in r["qa"]:
+        print("  defect:", d)
+    print("qa: %s" % ("no defects found" if not r["qa"] else "%d defect(s): correct them and rebuild" % len(r["qa"])))
     if a.preview:
         import dev_preview
         png = os.path.splitext(out)[0] + "_preview.png"

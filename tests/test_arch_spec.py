@@ -16,7 +16,7 @@ TEXT = {
     "L1": "Redundant PLC Controllers — 2\nRemote I/O Racks — 4\nIndustrial Ethernet Switches — 2\nFO Patch Panels — 2",
     "L2": "SCADA Servers — 2 (redundant)\nOperator Workstations — 2\nEngineering Workstation — 1\nSCADA Switches x 2",
 }
-ANSWERS = [("instrument_to_control", "hardwired"), ("io_protocol", "profinet"), ("io_topology", "daisy"), ("io_medium", "copper"),
+ANSWERS = [("instrument_to_control", "hardwired"), ("io_protocol", "profinet"), ("io_topology", "daisy"), ("io_medium", "copper"), ("io_display", "individual"),
            ("plc_sync:EQ-004", "dedicated"), ("plc_sync_paths:EQ-004", "2"), ("plc_sync_medium:EQ-004", "fibre"),
            ("plc_switch:EQ-004", "each_dedicated"), ("plc_switch_medium", "copper"), ("control_scada", "copper"),
            ("scada_homing", "dual"), ("scada_lan_medium", "copper"), ("fibre_topology", "p2p"),
@@ -157,7 +157,7 @@ class QuestionTests(unittest.TestCase):
 
     def test_sync_link_count_not_assumed(self):
         s = standard()
-        for k, v in ANSWERS[:5]:
+        for k, v in ANSWERS[:6]:
             A.answer(s, k, v)
         self.assertEqual(A.questions(s)[0]["key"], "plc_sync_paths:EQ-004")
 
@@ -329,6 +329,8 @@ class RevisionTests(unittest.TestCase):
         for k in ("L0", "L1", "L2"):
             A.add_equipment(s, k, TEXT[k])
         for k, v in ANSWERS:
+            if k == "io_display":
+                continue                                    # a star needs no simplified-display choice
             A.answer(s, k, "star" if k == "io_topology" else v)
             if k == "io_medium":
                 A.answer(s, "io_star_hub", "EQ-006")

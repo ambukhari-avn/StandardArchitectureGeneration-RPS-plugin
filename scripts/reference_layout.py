@@ -4,7 +4,7 @@ All geometry stays editable. This module never supplies cable colours.
 """
 import math
 from cable_labels import TYPICAL_LABEL
-from textfit import fit_size
+from textfit import fit_size, TextFitError, lines_needed
 from draw import LABEL_ZONE, SUB_ZONE, visible_size, visible_box
 from vsdx_writer import png_size
 
@@ -12,7 +12,10 @@ NAVY, BORDER = "#073878", "#27369B"
 LIGHT_BLUE, BODY, CLIENT, ORANGE = "#E4F3FF", "#F5FAFF", "#FFE5B5", "#FF8800"
 TAB_BLUE = "#001477"
 GAP, PAD, TITLE = .12, .14, .30
-LAYER_GAP = .34  # room for tabs above each layer without entering the preceding layer
+LAYER_GAP = .16  # clear gap between consecutive layer frames
+HEAD_W = .46     # width of the vertical navy heading strip on the left of every layer (same for all layers)
+HEAD_W_DESC = .70  # strip width when any layer also shows a description line
+HEAD_GAP = .14   # clearance between the heading strip and the equipment area
 CHANNEL = .16    # clear band between device rows for cable routing
 CABLE_GAP = .50  # band between rows that hold container boxes: a cable keeps ~7 mm from both borders
 CABLE_GAP_X = .45  # side-by-side container boxes: room for a vertical cable with clearance
@@ -136,6 +139,9 @@ def apply_layers(spec, shapes, warnings, B):
             if gid in by_id:
                 raise B.BuildError("reserved generated group id %r" % gid)
             group = _group(gid, layer, "", loose, B)
+            # 7.4: Avanceon equipment sits directly in its layer (an invisible arrangement). Client/existing scope keeps a
+            # visible box, and so do field instruments, whose representative hardwired connection needs a boundary.
+            group["frame"] = layer == "field" or any(s.get("scope") == "other" for s in loose)
             shapes.append(group)
             by_id[gid] = group
             for s in loose:
@@ -160,10 +166,10 @@ def apply_layers(spec, shapes, warnings, B):
         for pid, members in fed.items():
             parent = by_id.get(pid)
             children = [s for s in shapes if s.get("parent") == pid]
-            if parent and parent["kind"] == "group" and {s["id"] for s in children if s["kind"] == "box"} == members == {s["id"] for s in children}:
+            if parent and parent["kind"] == "group" and parent.get("frame") is not False and \
+                    {s["id"] for s in children if s["kind"] == "box"} == members == {s["id"] for s in children}:
                 parent["solid"] = True          # a dedicated I/O container: one box for all its racks
-            elif not parent or not parent.get("solid"):
-                racks.update(members)
+            # 7.5: a rack among other equipment gets no box of its own; the representative cable ends at the rack itself.
         for sid in sorted(racks):
             device = by_id[sid]
             gid = "__rack_" + sid
@@ -183,7 +189,7 @@ def apply_layers(spec, shapes, warnings, B):
             if rack["id"] not in talk and g["id"] not in talk:
                 warnings.append("I/O rack %r has no communication line: topology is never assumed from placement; give its "
                                 "daisy-chain, star or redundant connections (a \"chain\" line, or from/to lines)" % rack["id"])
-    for g in [s for s in shapes if s["kind"] == "group" and not s.get("label") and not s.get("generated")]:
+    for g in [s for s in shapes if s["kind"] == "group" and not s.get("label") and not s.get("generated") and s.get("frame") is not False]:
         kids = [s for s in shapes if s.get("parent") == g["id"]]
         if len(kids) == 1 and kids[0]["kind"] == "group":
             warnings.append("group %r is an unlabeled box that only wraps group %r: remove it unless it marks a scope, panel, site or "
@@ -228,6 +234,12 @@ def apply_layers(spec, shapes, warnings, B):
         # A layer's share follows what it must hold (rows of pictures, captions, titles), so large
         # pictures get room and blank space is not reserved for an arbitrary layer proportion.
         need = max([measure(s)[1] for s in roots] or [1.0]) + .32
+        # 7.3: cables running in a layer need routing clearance too, so busy layers get extra height.
+        layer_of = {x["id"]: x.get("layer") for x in shapes}
+        ends = [(str(c.get("from")), str(c.get("to"))) for c in spec.get("lines", []) if isinstance(c, dict) and "from" in c]
+        ends += [(a, b) for c in spec.get("lines", []) if isinstance(c, dict) and c.get("chain") for a, b in zip(c["chain"], c["chain"][1:])]
+        busy = sum(1 for a, b in ends if t["id"] in (layer_of.get(a), layer_of.get(b)))
+        need += min(.5, .03 * busy)
         natural[t["id"]] = float(weights.get(t["id"], max(need, .9)))
     available = B.AREA_H - LAYER_GAP * (len(order) - 1)
     total = sum(natural.values())
@@ -235,13 +247,15 @@ def apply_layers(spec, shapes, warnings, B):
     options = spec.get("layer_headers", {})
     if not isinstance(options, dict):
         raise B.BuildError("layer_headers must be an object")
+    any_desc = any(isinstance(options.get(t["id"]), dict) and options[t["id"]].get("description") for t in order)
+    head_w = HEAD_W_DESC if any_desc else HEAD_W
     for t in order:
         h = available * natural[t["id"]] / total
         override = options.get(t["id"], {})
         if not isinstance(override, dict):
             raise B.BuildError("each layer_headers entry must be an object")
         default_name = "Control System" if t["id"] == "control" else t["name"]
-        p = dict(t, x=0., y=y, w=B.AREA_W, h=h, reference=True,
+        p = dict(t, x=0., y=y, w=B.AREA_W, h=h, reference=True, head_w=head_w,
                  name=str(override.get("name", default_name)), desc=str(override.get("description", "")))
         panels.append(p)
         roots = [s for s in shapes if s.get("layer") == t["id"] and not s.get("parent")]
@@ -249,12 +263,12 @@ def apply_layers(spec, shapes, warnings, B):
         if side and t["id"] != "control":
             raise B.BuildError('placement="beside" is for a requested panel in the control layer')
         roots = [s for s in roots if s not in side] + side
-        # Headers occupy a shallow row above equipment, never a full-height
-        # left column. Root blocks fill the page width between equal margins.
-        x = PAD
-        header = min(.60 if p['desc'] else .30, h * .42)
+        # The heading is a vertical navy strip on the left of the layer (7.2); the equipment
+        # area starts to its right and uses the full layer height.
+        x = head_w + HEAD_GAP
+        header = min(PAD, h * .08)
         bottom_pad = min(PAD, h * .08)
-        width, height = B.AREA_W - 2 * PAD, h - header - bottom_pad
+        width, height = B.AREA_W - x - PAD, h - header - bottom_pad
         shares = [float(s.get("width_weight") or (1 if s in side else 3 if side else 1)) for s in roots]
         if any(not math.isfinite(v) or v <= 0 for v in shares):
             raise B.BuildError("width_weight must be positive")
@@ -379,15 +393,21 @@ def group_connections(spec, shapes, lines):
             s = by_id[s["parent"]]
             ids.add(s["id"])
         return ids
+    def visible(g):
+        return g.get("frame") is not False
     def boundary(s, other):
         # Keep internal wiring inside the shared container. Across containers,
-        # promote endpoints to the outside box so cables do not traverse pictures.
+        # promote endpoints to the outside VISIBLE box so cables do not traverse pictures;
+        # invisible arrangements are never an endpoint (a cable must end on something drawn).
         if s["kind"] == "group":
             return s  # an explicit box endpoint is already the intended boundary
         other_parents = ancestors(other)
-        while s.get("parent") and s["parent"] not in other_parents:
-            s = by_id[s["parent"]]
-        return s
+        best, cur = s, s
+        while cur.get("parent") and cur["parent"] not in other_parents:
+            cur = by_id[cur["parent"]]
+            if visible(cur):
+                best = cur
+        return best
     out, shared = [], {}
     for c in lines:
         a, b = by_id[c["a"]], by_id[c["b"]]
@@ -402,10 +422,14 @@ def group_connections(spec, shapes, lines):
             out.append(c)
             continue
         source, target = (a, b) if a.get("layer") == "field" else (b, a)
-        while source.get("parent"):
-            source = by_id[source["parent"]]
-        if target["kind"] != "group" and target.get("parent"):
-            target = by_id[target["parent"]]
+        top, cur = source, source
+        while cur.get("parent"):
+            cur = by_id[cur["parent"]]
+            if visible(cur):
+                top = cur
+        source = top
+        if target["kind"] != "group" and target.get("parent") and visible(by_id[target["parent"]]) and by_id[target["parent"]].get("solid"):
+            target = by_id[target["parent"]]    # the common I/O box; never a PLC system or panel box (8.7: end at the I/O)
         key = (source["id"], target["id"], c["cable"])
         if key not in shared:
             displayed = dict(c, a=key[0], b=key[1], source_connections=[], representative=True, label=TYPICAL_LABEL)
@@ -415,22 +439,53 @@ def group_connections(spec, shapes, lines):
     return out
 
 
+HEAD_SIZES = (14, 13, 12, 11, 10, 9, 8, 7, 6.5)
+
+
+def heading_text(label, length, across):
+    """Largest size at which the heading fits the strip on one line; otherwise two lines split at a word boundary
+    (written with an explicit line break so Visio and the preview agree). Returns (text, size) or (label, None)."""
+    for size in HEAD_SIZES:
+        if lines_needed(label, length, size, True) == 1 and size * 1.2 / 72 <= across + .01:
+            return label, size
+    words = label.split()
+    for size in HEAD_SIZES:
+        if 2 * size * 1.2 / 72 > across + .01:
+            continue
+        for i in range(1, len(words)):
+            a, b = " ".join(words[:i]), " ".join(words[i:])
+            if lines_needed(a, length, size, True) == 1 and lines_needed(b, length, size, True) == 1:
+                return a + "\n" + b, size
+    return label, None
+
+
 def draw_layer(page, p, B):
+    """One layer: a light frame with a vertical navy heading strip along its left side (7.2). The layer name is turned
+    90 degrees (reading upwards) and fitted inside the strip; the strip has the same width in every layer and stays
+    inside the frame, clear of equipment and cables."""
     x, y, w, h = B.MARGIN + p["x"], B.TOP - p["y"] - p["h"], p["w"], p["h"]
-    # A single layer frame, with a navy tab straddling its top border.
-    # Descriptions use a shallow header row; equipment fills the width below.
     page.rect("zone", x, y, w, h, fill=BODY, line=BORDER, lw=1.5, rounding=.04, key="layer:" + p["id"])
+    hw = p.get("head_w", HEAD_W)
+    inset = .05
+    sx, sy, sh = x + inset, y + inset, h - 2 * inset
+    page.rect("zone", sx, sy, hw - inset, sh, fill=TAB_BLUE, line=TAB_BLUE, lw=1.0, rounding=.06, key="layer-heading:" + p["id"])
     label = p["name"]
-    tab_w = min(w - .24, max(1.7, min(3.4, .30 + len(label) * .135)))
-    tab_h, tab_y = .36, y + h - .18
-    size = fit_size(label, tab_w - .20, tab_h - .04, (14, 13, 12, 11, 10, 9, 8), True)
-    page.rect("zone", x + .13, tab_y, tab_w, tab_h, fill=TAB_BLUE, line=TAB_BLUE,
-              lw=1.5, rounding=.10, key="layer-heading:" + p["id"])
-    page.text(x + .23, tab_y + .02, tab_w - .20, tab_h - .04, label,
-              size=size, bold=True, color="#FFFFFF", key="layer-name:" + p["id"])
+    name_w = (hw - inset) if not p.get("desc") else (hw - inset) * .58
+    if p.get("desc") or hw > HEAD_W:                              # two text columns: name, then the smaller description
+        name_w = (hw - inset) * .58
+    length = sh - .16
+    label, size = heading_text(label, length, name_w - .06)
+    if size is None:
+        raise B.BuildError("layer name %r does not fit its heading strip; shorten it or give the layer more height (layer_weights)" % p["name"])
+    # A text block turned 90 degrees: its own width runs along the strip (length), its height across it.
+    page.text(sx + .03, sy + .08, name_w - .06, length, label, size=size, bold=True, color="#FFFFFF",
+              text_angle=90, key="layer-name:" + p["id"])
     if p.get("desc"):
-        desc_h = min(.28, h * .20)
-        desc_size = fit_size(p["desc"], w - 2 * PAD, desc_h, (10, 9, 8, 7, 6), True)
-        page.text(x + PAD, y + h - .23 - desc_h, w - 2 * PAD, desc_h, p["desc"],
-                  size=desc_size, bold=True, halign=0, valign=2, key="layer-desc:" + p["id"])
+        dw = hw - inset - name_w
+        try:
+            dsize = fit_size(p["desc"], length, dw - .04, (9, 8, 7, 6.5, 6), False)
+        except TextFitError:
+            raise B.BuildError("layer description %r does not fit its heading strip; shorten it" % p["desc"])
+        page.text(sx + name_w, sy + .08, dw - .04, length, p["desc"], size=dsize, color="#DCE8FF",
+                  text_angle=90, key="layer-desc:" + p["id"])
     return size

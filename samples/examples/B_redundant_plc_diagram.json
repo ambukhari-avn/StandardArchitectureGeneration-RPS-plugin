@@ -1,0 +1,203 @@
+{
+ "project": {
+  "client": "ACME Contracting",
+  "end_user": "City Water Authority",
+  "project": "Water Treatment Plant Upgrade",
+  "doc_name": "PLC & SCADA System Architecture",
+  "prepared_by": "AMB",
+  "revision": "R0"
+ },
+ "notes": [],
+ "title": "PLC & SCADA SYSTEM ARCHITECTURE",
+ "layers": [
+  "scada",
+  "control",
+  "field"
+ ],
+ "layer_headers": {
+  "scada": {
+   "name": "SCADA / Supervisory"
+  },
+  "control": {
+   "name": "Control System"
+  },
+  "field": {
+   "name": "Field Instruments"
+  }
+ },
+ "shapes": [
+  {
+   "id": "G-FIELD",
+   "kind": "group",
+   "label": "Field Instruments",
+   "scope": "avanceon",
+   "layer": "field",
+   "columns": 3
+  },
+  {
+   "id": "EQ-001-1",
+   "parent": "G-FIELD",
+   "label": "Pressure Transmitters",
+   "sublabel": "(Qty 12)",
+   "component": "pressure_transmitter",
+   "image": "../pictures/pressure_transmitter.png",
+   "image_source": "Bundled example picture (stands in for a web-sourced manufacturer image)"
+  },
+  {
+   "id": "EQ-002-1",
+   "parent": "G-FIELD",
+   "label": "Temperature Transmitters",
+   "sublabel": "(Qty 8)",
+   "component": "temperature_transmitter_rtd_in_thermowell"
+  },
+  {
+   "id": "EQ-003-1",
+   "parent": "G-FIELD",
+   "label": "Flow Transmitters",
+   "sublabel": "(Qty 6)",
+   "component": "electromagnetic_flowmeter",
+   "image": "../pictures/flow_transmitter.png",
+   "image_source": "Bundled example picture (stands in for a web-sourced manufacturer image)"
+  },
+  {
+   "id": "G-control",
+   "kind": "group",
+   "label": "",
+   "scope": "avanceon",
+   "layer": "control",
+   "frame": false,
+   "columns": 5
+  },
+  {
+   "id": "EQ-004-1",
+   "parent": "G-control",
+   "label": "Redundant PLC CPUs",
+   "row": 1,
+   "sublabel": "(Primary)",
+   "component": "rack_plc"
+  },
+  {
+   "id": "EQ-004-2",
+   "parent": "G-control",
+   "label": "Redundant PLC CPUs",
+   "row": 1,
+   "sublabel": "(Secondary)",
+   "component": "rack_plc"
+  },
+  {
+   "id": "EQ-005-1",
+   "parent": "G-control",
+   "label": "Remote I/O Racks",
+   "row": 2,
+   "sublabel": "Qty: 4",
+   "component": "remote_i_o_drop"
+  },
+  {
+   "id": "EQ-006-1",
+   "parent": "G-control",
+   "label": "Industrial Ethernet Switch 1",
+   "row": 0,
+   "component": "ethernet_switch"
+  },
+  {
+   "id": "EQ-006-2",
+   "parent": "G-control",
+   "label": "Industrial Ethernet Switch 2",
+   "row": 0,
+   "component": "ethernet_switch"
+  },
+  {
+   "id": "G-scada",
+   "kind": "group",
+   "label": "",
+   "scope": "avanceon",
+   "layer": "scada",
+   "frame": false,
+   "columns": 3
+  },
+  {
+   "id": "EQ-007-1",
+   "parent": "G-scada",
+   "label": "SCADA Server",
+   "sublabel": "(Primary)",
+   "component": "rack_server"
+  },
+  {
+   "id": "EQ-007-2",
+   "parent": "G-scada",
+   "label": "SCADA Server",
+   "sublabel": "(Standby)",
+   "component": "rack_server"
+  },
+  {
+   "id": "EQ-008-1",
+   "parent": "G-scada",
+   "label": "Operator Workstation",
+   "component": "client_operator_workstation"
+  }
+ ],
+ "lines": [
+  {
+   "cable": "hardwired",
+   "label": "Typical Hardwired Signals — AI/DI/AO/DO",
+   "from": "EQ-001-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "hardwired",
+   "label": "Typical Hardwired Signals — AI/DI/AO/DO",
+   "from": "EQ-002-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "hardwired",
+   "label": "Typical Hardwired Signals — AI/DI/AO/DO",
+   "from": "EQ-003-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "ethernet",
+   "label": "Dual redundant network — 4 racks",
+   "from": "EQ-006-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-006-2",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "fibre",
+   "label": "Redundancy Sync (2 links)",
+   "from": "EQ-004-1",
+   "to": "EQ-004-2",
+   "direct": true,
+   "arrows": "both"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-004-1",
+   "to": "EQ-006-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-004-2",
+   "to": "EQ-006-2"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-006-1",
+   "to": "EQ-007-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-006-2",
+   "to": "EQ-007-2"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-008-1",
+   "to": "EQ-006-1"
+  }
+ ]
+}

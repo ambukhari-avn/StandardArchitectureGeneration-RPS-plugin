@@ -84,8 +84,8 @@ def render(page, path):
                 _dashed_path(d, pts, s["line"], stroke)
             else:
                 d.line(pts, fill=s["line"], width=stroke)
-            if s.get("arrow") and len(pts) > 1:                                 # filled arrowhead on the last point
-                (px_, py_), (qx, qy) = pts[-2], pts[-1]
+            ends = ([(pts[-2], pts[-1])] if s.get("arrow") else []) + ([(pts[1], pts[0])] if s.get("arrow_start") else [])
+            for (px_, py_), (qx, qy) in (ends if len(pts) > 1 else []):        # filled arrowheads on the marked ends
                 L = max(1e-6, ((qx - px_) ** 2 + (qy - py_) ** 2) ** 0.5)
                 ux, uy = (qx - px_) / L, (qy - py_) / L
                 a, b = DPI * 0.09, DPI * 0.04
@@ -107,9 +107,13 @@ def render(page, path):
                 _dashed_outline(d, box, s["kind"], s["line"], stroke, s["rounding"] * DPI)
             if s["text"] and s.get("text_angle"):                       # rotated text (layer names)
                 f = _font(s["size"], s["bold"])
-                w_ = int(d.textlength(s["text"], font=f)) + 4
-                tile = Image.new("RGBA", (w_, int(f.size * 1.6)), (0, 0, 0, 0))
-                ImageDraw.Draw(tile).text((2, 1), s["text"], fill="white", font=f)
+                parts = s["text"].split("\n")
+                w_ = max(int(d.textlength(p, font=f)) for p in parts) + 4
+                lh = int(f.size * 1.2)
+                tile = Image.new("RGBA", (w_, lh * len(parts) + int(f.size * .4)), (0, 0, 0, 0))
+                td = ImageDraw.Draw(tile)
+                for n, p in enumerate(parts):
+                    td.text(((w_ - td.textlength(p, font=f)) / 2, 1 + n * lh), p, fill=s.get("color") or "white", font=f)
                 tile = tile.rotate(s["text_angle"], expand=True)
                 im.paste(tile, (int((box[0] + box[2] - tile.width) / 2), int((box[1] + box[3] - tile.height) / 2)), tile)
             elif s["text"]:

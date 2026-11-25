@@ -1,0 +1,171 @@
+{
+ "project": {
+  "client": "ACME Contracting",
+  "end_user": "City Water Authority",
+  "project": "Water Treatment Plant Upgrade",
+  "doc_name": "OT Network Architecture with DMZ",
+  "prepared_by": "AMB",
+  "revision": "R0"
+ },
+ "notes": [],
+ "title": "OT NETWORK ARCHITECTURE WITH DMZ",
+ "layers": [
+  "enterprise",
+  "dmz",
+  "scada",
+  "control"
+ ],
+ "layer_headers": {
+  "enterprise": {
+   "name": "Enterprise / Business Network"
+  },
+  "dmz": {
+   "name": "DMZ — Demilitarized Zone"
+  },
+  "scada": {
+   "name": "SCADA / Supervisory"
+  },
+  "control": {
+   "name": "Control"
+  }
+ },
+ "shapes": [
+  {
+   "id": "G-control",
+   "kind": "group",
+   "label": "",
+   "scope": "avanceon",
+   "layer": "control",
+   "frame": false,
+   "columns": 2
+  },
+  {
+   "id": "EQ-001-1",
+   "parent": "G-control",
+   "label": "PLC",
+   "row": 1,
+   "component": "rack_plc"
+  },
+  {
+   "id": "EQ-002-1",
+   "parent": "G-control",
+   "label": "Industrial Ethernet Switch",
+   "row": 0,
+   "component": "ethernet_switch"
+  },
+  {
+   "id": "G-scada",
+   "kind": "group",
+   "label": "",
+   "scope": "avanceon",
+   "layer": "scada",
+   "frame": false,
+   "columns": 3
+  },
+  {
+   "id": "EQ-003-1",
+   "parent": "G-scada",
+   "label": "SCADA Server",
+   "sublabel": "(Primary)",
+   "component": "rack_server"
+  },
+  {
+   "id": "EQ-003-2",
+   "parent": "G-scada",
+   "label": "SCADA Server",
+   "sublabel": "(Standby)",
+   "component": "rack_server"
+  },
+  {
+   "id": "EQ-004-1",
+   "parent": "G-scada",
+   "label": "SCADA Switch",
+   "component": "ethernet_switch"
+  },
+  {
+   "id": "G-dmz",
+   "kind": "group",
+   "label": "",
+   "scope": "avanceon",
+   "layer": "dmz",
+   "frame": false,
+   "columns": 2
+  },
+  {
+   "id": "EQ-005-1",
+   "parent": "G-dmz",
+   "label": "Firewall",
+   "sublabel": "Fortinet FortiGate 100F",
+   "component": "firewall"
+  },
+  {
+   "id": "EQ-006-1",
+   "parent": "G-dmz",
+   "label": "Historian Replica Server",
+   "component": "historian_application_server"
+  },
+  {
+   "id": "G-enterprise",
+   "kind": "group",
+   "label": "",
+   "scope": "avanceon",
+   "layer": "enterprise",
+   "frame": false,
+   "columns": 2
+  },
+  {
+   "id": "EQ-007-1",
+   "parent": "G-enterprise",
+   "label": "ERP Server",
+   "component": "rack_server"
+  },
+  {
+   "id": "EQ-008-1",
+   "parent": "G-enterprise",
+   "label": "Corporate Switch",
+   "component": "ethernet_switch"
+  }
+ ],
+ "lines": [
+  {
+   "cable": "ethernet",
+   "from": "EQ-001-1",
+   "to": "EQ-002-1"
+  },
+  {
+   "cable": "fibre",
+   "from": "EQ-002-1",
+   "to": "EQ-004-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-003-1",
+   "to": "EQ-004-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-003-2",
+   "to": "EQ-004-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-005-1",
+   "to": "EQ-004-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-005-1",
+   "to": "EQ-008-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-006-1",
+   "to": "EQ-005-1"
+  },
+  {
+   "cable": "ethernet",
+   "from": "EQ-007-1",
+   "to": "EQ-008-1"
+  }
+ ]
+}

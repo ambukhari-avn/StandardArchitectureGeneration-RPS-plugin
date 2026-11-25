@@ -633,7 +633,7 @@ def plan(spec):
     # 5. control network -> SCADA network (5.6)
     src = recs(spec, "switch", ctl) or recs(spec, CONTROLLERS, ctl)
     dst = recs(spec, "switch", scl) or recs(spec, SCADA_ENDPOINTS, scl)
-    linked = any(c for c in spec["connections"] if c.get("origin") != "ctlscada"
+    linked = any(c for c in spec["connections"] if (not c.get("origin") or c["origin"].startswith("plcsw:"))   # earlier steps only
                  and {c["source"], c["destination"]} & {e["id"] for e in src} and {c["source"], c["destination"]} & {e["id"] for e in dst})
     if src and dst and set(e["id"] for e in src) != set(e["id"] for e in dst) and not linked:
         out.append(_control_scada(spec, src, dst, A))
@@ -792,6 +792,13 @@ def _io(spec, pending, plcs, A, ctl):
                         [r["id"] for r in pending]), [])]
         if hub in (OTHER, NA):
             return []
+    if topo in ("daisy", "ring", "dual") and any(units(r) > 1 for r in pending) and not (spec.get("layout") or {}).get("io_display") \
+            and not _ans(A, "io_display"):
+        out.append((_q("io_display", 2, "A %s cannot be shown accurately with one rack picture. How should the I/O racks be drawn?" %
+                       {"daisy": "daisy chain", "ring": "ring", "dual": "dual redundant network"}[topo],
+                       [C("individual", "Show each rack (exact topology) \u2014 recommended"),
+                        C("representative", "One representative rack with the quantity and topology written on its link")],
+                       [r["id"] for r in pending], why="7.5: technical correctness comes before graphic simplification"), []))
     for r in pending:
         owner = plcs[0]["id"] if len(plcs) == 1 else _ans(A, "io_owner:" + r["id"])
         if not owner:
@@ -1058,7 +1065,7 @@ def _link(spec, r, side, A):
         return (None, [])
     return (None, [dict(source=r["id"], destination=tgt, protocol=canon("protocol", proto) if proto != OTHER else None,
                         medium=MEDIUM_MAP.get(med, med), topology="Point-to-point", redundancy="Single", paths=None, direction=None,
-                        scope=None, label=None, pattern="first-to-first", origin=k)])
+                        scope=None, label=None, pattern="each-to-one", origin=k)])
 
 
 def questions(spec):
@@ -1252,6 +1259,11 @@ def validate(spec):
             add("error", e["id"], "layer %s is not selected" % e["layer"])
         for f in e.get("flags", []):
             add("question", e["id"], "%s: %s" % (e["name"], f))
+    field = {l["key"] for l in spec["layers"] if l["id"] == "field"}
+    for e in spec["equipment"]:                                       # 7.7: the field layer shows field devices only
+        if e["layer"] in field and e["category"] not in ("instrument", "other"):
+            add("question", e["id"], "%s is not a field device: the Field Instrument layer shows instruments and field-mounted devices "
+                                     "only. Move it to its proper layer, or confirm it was explicitly requested here" % e["name"])
     for l in spec["layers"]:
         if not any(e["layer"] == l["key"] for e in spec["equipment"]):
             add("warning", l["key"], "layer %s has no equipment" % l["name"])
@@ -1669,6 +1681,22 @@ def singular(name):
     return " ".join(words[:-1] + [w])
 
 
+def io_representative(spec, e):
+    """7.5: show one representative rack (with the total quantity) when that is technically faithful: a star, local backplane or
+    unconnected racks. A daisy chain, ring or redundant network shows each rack unless the user chose the simplified display."""
+    if units(e) < 2:
+        return False
+    mode = (spec.get("layout") or {}).get("io_display") or _ans(spec["answers"], "io_display") or "auto"
+    if mode == "representative":
+        return True
+    if mode == "individual":
+        return False
+    conns = [c for c in spec["connections"] if e["id"] in (c["source"], c["destination"]) or e["id"] in (c.get("nodes") or [])]
+    net = [c for c in conns if c.get("protocol") != "Hardwired AI/DI/AO/DO"]
+    return all(c.get("pattern") in ("each-to-first", "first-to-first", "none") and c.get("topology") in (None, "Star", "Local backplane",
+                                                                                                         "Point-to-point") for c in net)
+
+
 def unit_ids(e):
     return ["%s-%d" % (e["id"], i) for i in range(1, units(e) + 1)]
 
@@ -1714,62 +1742,92 @@ def to_diagram(spec):
             groups[gid] = g
             shapes.append(g)
         return gid
-    plcs = recs(spec, CONTROLLERS)
+
+    rep_io = {e["id"]: io_representative(spec, e) for e in recs(spec, "io")}
+    shown = {}                                                         # record id -> displayed shape ids (one per drawn unit)
+    for e in spec["equipment"]:
+        n = 1 if e["category"] == "instrument" or rep_io.get(e["id"]) else units(e)
+        shown[e["id"]] = ["%s-%d" % (e["id"], i) for i in range(1, n + 1)]
+
+    def disp(eid, i=1):
+        ids = shown.get(eid) or ["%s-1" % eid]
+        return ids[min(i, len(ids)) - 1]
+
+    def scope_of(e):
+        return "other" if (e.get("scope") or "").startswith("other") else "avanceon"
+    ctl_keys = {l["key"] for l in spec["layers"] if l["id"] == "control"}
+    systems = [e for e in recs(spec, CONTROLLERS) if e["layer"] in ctl_keys and not (e["category"] == "dcs" and not e.get("quantity"))]
+    multi = len(systems) > 1
+    CONTROL_ROW = {"fo_panel": 0, "switch": 1, "media_converter": 1, "router": 1, "firewall": 1, "plc": 2, "rtu": 2, "dcs": 2, "io": 3}
     for e in spec["equipment"]:
         lay = lid[e["layer"]]
-        scope = "other" if (e.get("scope") or "").startswith("other") else "avanceon"
+        scope = scope_of(e)
         cat = e["category"]
+        root = "G-" + lay
         if cat in ("existing_scada", "dcs") and not e.get("quantity"):
-            group("G-" + e["id"], lay, e["name"], scope="other")       # an existing system summary, no invented device picture
-            continue
-        if cat == "plc" or (cat in ("rtu", "dcs") and lay == "control"):
-            parent = group("G-SYS-" + e["id"], lay, "%s" % e["name"], scope=scope, columns=1)
-        elif cat == "io":
-            sys_ = owner.get(e["id"])
-            if sys_ and _get(spec, sys_) and lid[_get(spec, sys_)["layer"]] == lay:
-                parent = group("G-IO-" + sys_, lay, "I/O Racks", parent=group("G-SYS-" + sys_, lay, _get(spec, sys_)["name"], columns=1),
-                               solid=True, row=1, scope=scope)
+            group(root, lay, "", frame=False)
+            group("G-" + e["id"], lay, e["name"], scope="other", parent=root, row=2 if lay == "control" else None)
+            if lay != "control":
+                groups["G-" + e["id"]].pop("row", None)
+            continue                                                   # an existing system summary, no invented device picture
+        place = {}
+        if lay == "field" or cat == "instrument" and lay not in ("control",):
+            # 7.7: one field-instrument arrangement (not one box per PLC); its border is where the representative cable starts.
+            parent = group("G-FIELD" + ("-other" if scope == "other" else ""), lay,
+                           "Field Instruments" + (" (Client Scope)" if scope == "other" else ""), scope=scope)
+        elif lay == "control":
+            group(root, lay, "", frame=False)
+            if scope == "other":
+                parent = group("G-OTHER-" + lay, lay, "Client / Existing Scope", scope="other", parent=root, row=2)
+            elif multi and cat in CONTROLLERS:
+                parent = group("G-SYS-" + e["id"], lay, e["name"], parent=root, row=2, columns=1)
+                place = {"row": 0}
+            elif cat == "io":
+                sys_ = owner.get(e["id"])
+                host, row = ("G-SYS-" + sys_, 1) if multi and sys_ and "G-SYS-" + sys_ in groups else (root, 3)
+                if len(shown[e["id"]]) > 1:                            # several racks drawn: one common solid I/O box per PLC system
+                    parent = group("G-IO-" + (sys_ or lay), lay, "I/O Racks", parent=host, row=row, solid=True)
+                else:                                                  # 7.5: a representative rack sits directly in place, no box
+                    parent, place = host, {"row": row}
             else:
-                parent = group("G-IO-" + e["layer"], lay, "I/O Racks", solid=True, scope=scope)
-        elif cat == "instrument":
-            tgt = field_target.get(e["id"])
-            label = "Field Instruments" + (" — %s" % _get(spec, tgt)["name"] if tgt and len(plcs) > 1 and _get(spec, tgt) else "")
-            parent = group("G-FIELD-%s%s" % (tgt or e["layer"], "-other" if scope == "other" else ""), lay, label, scope=scope)
+                parent, place = root, {"row": CONTROL_ROW.get(cat, 2)}
         elif scope == "other":
-            parent = group("G-OTHER-" + e["layer"], lay, "Client / Existing Scope", scope="other")
-        elif lay == "scada" or cat in SCADA_ENDPOINTS | {"switch", "video_wall", "firewall"}:
-            parent = group("G-" + lay, lay, "", scope=scope)
+            parent = group("G-OTHER-" + lay, lay, "Client / Existing Scope", scope="other")
         else:
-            parent = group("G-" + lay, lay, "Control Network" if lay == "control" else "", scope=scope)
-        n = units(e)
+            parent = group(root, lay, "", frame=False)                 # 7.4: Avanceon equipment sits directly in its layer
         cid = component_for(e, known)
-        for i, uid in enumerate(unit_ids(e), 1):
-            s = {"id": uid, "parent": parent, "label": singular(e["name"]) if n > 1 else e["name"]}
+        ids = shown[e["id"]]
+        for i, uid in enumerate(ids, 1):
+            sh = {"id": uid, "parent": parent, "label": singular(e["name"]) if len(ids) > 1 else e["name"]}
+            sh.update(place)
             if cat == "instrument":
-                s["label"] = e["name"]
-                s["sublabel"] = "(Qty %s)" % (e["quantity"] if e.get("quantity") else "TBC")
-            elif is_pair(e) and n == 2:
-                s["sublabel"] = "(Primary)" if i == 1 else ("(Secondary)" if cat in CONTROLLERS else "(Standby)")
-            elif n > 1:
-                s["label"] = "%s %d" % (singular(e["name"]), i)
+                sh["label"] = e["name"]
+                sh["sublabel"] = "(Qty %s)" % (e["quantity"] if e.get("quantity") else "TBC")
+            elif rep_io.get(e["id"]):
+                sh["label"] = e["name"]
+                sh["sublabel"] = "Qty: %s" % (e["quantity"] if e.get("quantity") else "TBC")
+            elif is_pair(e) and len(ids) == 2:
+                sh["sublabel"] = "(Primary)" if i == 1 else ("(Secondary)" if cat in CONTROLLERS else "(Standby)")
+            elif len(ids) > 1:
+                sh["label"] = "%s %d" % (singular(e["name"]), i)
             if e.get("oem") or e.get("model"):
-                s["sublabel"] = ((s.get("sublabel") + " ") if s.get("sublabel") else "") + " ".join(x for x in (e.get("oem"), e.get("model")) if x)
+                sh["sublabel"] = ((sh.get("sublabel") + " ") if sh.get("sublabel") else "") + " ".join(x for x in (e.get("oem"), e.get("model")) if x)
             if cid:
-                s["component"] = cid
-            if cat == "plc" or cat == "io":
-                s["row"] = 0 if cat == "plc" else None
-                if s["row"] is None:
-                    del s["row"]
+                sh["component"] = cid
             img = spec.get("images", {}).get(e["id"])
             if img:
-                s.update({k: v for k, v in img.items() if k in ("image", "image_source", "oem", "model", "image_override", "background")})
-            shapes.append(s)
-            if cat == "instrument":
-                break                                                  # one representative picture per instrument type, quantity in caption
+                sh.update({k: v for k, v in img.items() if k in ("image", "image_source", "oem", "model", "image_override", "background")})
+            shapes.append(sh)
         if e.get("quantity") is None:
             warnings.append("%s %s: quantity not stated; drawn once with 'Qty TBC'" % (e["id"], e["name"]))
-    for g in groups.values():                                          # one row of equipment per box unless it is crowded
+    for g in groups.values():
         kids = [x for x in shapes if x.get("parent") == g["id"]]
+        if any(k.get("row") is not None for k in kids):
+            for k in kids:
+                k.setdefault("row", 2)
+            used = sorted({k["row"] for k in kids})                  # compact rows: no empty bands for absent equipment (7.6)
+            for k in kids:
+                k["row"] = used.index(k["row"])
         if "columns" not in g:
             g["columns"] = max(1, min(8, len(kids)))
     for c in spec["connections"]:
@@ -1785,53 +1843,73 @@ def to_diagram(spec):
         common = {"cable": cab}
         if c.get("label"):
             common["label"] = c["label"]
+        rep = rep_io.get(b["id"]) and units(b) > 1
+        if rep and c.get("pattern") in ("chain", "ring", "each-to-first", "all-to-all", "links"):
+            # 7.5 simplified display: a link from each source unit to the representative rack, the real topology written on it.
+            topo = "Dual redundant network" if c.get("redundancy") == "Redundant network" and c.get("topology") != "Ring" else \
+                c.get("topology") or "I/O network"
+            common["label"] = "%s \u2014 %d racks" % (topo, units(b))
+            srcs = shown[a["id"]] if c.get("pattern") == "all-to-all" else [disp(a["id"])]
+            for n_, x in enumerate(srcs):
+                ln = dict(common, **{"from": x, "to": disp(b["id"])})
+                if n_:
+                    ln.pop("label", None)                             # the topology is written once
+                lines.append(ln)
+            continue
         if c.get("pattern") == "ring":
-            nodes = c.get("nodes") or ([unit_ids(a)[0]] + unit_ids(b))
-            nodes = [unit_ids(_get(spec, n))[0] if _get(spec, n) else n for n in nodes] if c.get("nodes") else nodes
-            if c.get("origin", "").startswith("io:"):
+            nodes = c.get("nodes") or ([a["id"]] + [b["id"]])
+            if c.get("nodes"):
+                nodes = [disp(n) for n in nodes]
+            else:
+                nodes = [disp(a["id"])] + shown[b["id"]]
+            if (c.get("origin") or "").startswith("io:"):
                 existing = next((r for r in rings if r.get("_src") == c["source"]), None)
                 if existing:
-                    existing["nodes"] += [n for n in unit_ids(b) if n not in existing["nodes"]]
+                    existing["nodes"] += [n for n in shown[b["id"]] if n not in existing["nodes"]]
                     continue
             rings.append({"id": "ring-" + c["id"], "label": c.get("label") or "Fiber Optic Ring", "cable": cab, "nodes": nodes, "_src": c["source"]})
             continue
         if c.get("pattern") == "pair":
-            u = unit_ids(a)
+            u = shown[a["id"]]
             if len(u) >= 2:
-                for _ in range(c.get("paths") or 1):
-                    lines.append(dict(common, **{"from": u[0], "to": u[1], "direct": True, "label": c.get("label") or "Redundancy Sync"}))
-                    break                                              # the label carries the number of links; one drawn line
+                label = c.get("label") or "Redundancy Sync"
                 if (c.get("paths") or 1) > 1:
-                    lines[-1]["label"] = "%s (%d links)" % (lines[-1]["label"], c["paths"])
+                    label = "%s (%d links)" % (label, c["paths"])
+                # 8.4: bidirectional sync link, distinguished from network paths by its label and double-ended arrows.
+                lines.append(dict(common, **{"from": u[0], "to": u[1], "direct": True, "label": label, "arrows": "both"}))
             continue
         if c.get("pattern") == "group":
-            ga = next((s["parent"] for s in shapes if s.get("id") in unit_ids(a)), None)
-            tgt = owner.get(b["id"]) if b["category"] == "io" else None
-            gb = "G-IO-" + tgt if tgt and "G-IO-" + tgt in groups else next((s["parent"] for s in shapes if s.get("id") in unit_ids(b)), None)
-            for u in unit_ids(b)[:1]:
-                lines.append(dict(common, **{"from": unit_ids(a)[0], "to": u}))
+            # 8.7: a representative hardwired connection that ends at the actual I/O (box), never at a switch or CPU.
+            lines.append(dict(common, **{"from": disp(a["id"]), "to": disp(b["id"])}))
             continue
         if c.get("pattern") == "chain":
             existing = next((l for l in lines if l.get("_chain") == c["source"]), None)
             if existing:
-                existing["chain"] += [u for u in unit_ids(b) if u not in existing["chain"]]
+                existing["chain"] += [u for u in shown[b["id"]] if u not in existing["chain"]]
             else:
-                lines.append(dict(common, chain=[unit_ids(a)[0]] + unit_ids(b), _chain=c["source"]))
+                lines.append(dict(common, chain=[disp(a["id"])] + shown[b["id"]], _chain=c["source"]))
             continue
         if c.get("pattern") == "links":
-            pairs = [("%s-%d" % (a["id"], x), "%s-%d" % (b["id"], y)) for x, y in c["links"]]
+            pairs = [(disp(a["id"], x), disp(b["id"], y)) for x, y in c["links"]]
         elif c.get("pattern") == "each-to-first":
-            pairs = [(unit_ids(a)[0], u) for u in unit_ids(b)] if a["category"] != "instrument" else [(unit_ids(a)[0], unit_ids(b)[0])]
+            pairs = [(disp(a["id"]), u) for u in shown[b["id"]]]
         elif c.get("pattern") == "all-to-all":
-            pairs = [(x, y) for x in unit_ids(a) for y in unit_ids(b)]
+            pairs = [(x, y) for x in shown[a["id"]] for y in shown[b["id"]]]
+        elif c.get("pattern") == "each-to-one":                       # every unit of the source has its own link to the target
+            pairs = [(x, disp(b["id"])) for x in shown[a["id"]]]
         else:
-            pairs = [(unit_ids(a)[0], unit_ids(b)[0])]
-        if a["category"] == "instrument":
-            pairs = [(unit_ids(a)[0], y) for _, y in pairs]
+            pairs = [(disp(a["id"]), disp(b["id"]))]
         for i, (x, y) in enumerate(pairs):
-            hops = [x] + ["%s-%d" % (v, min(i + 1, units(_get(spec, v)))) for v in c.get("via") or [] if _get(spec, v)] + [y]
-            for p, q in zip(hops, hops[1:]):
-                lines.append(dict(common, **{"from": p, "to": q}))
+            hops = [x] + [disp(v, i + 1) for v in c.get("via") or [] if _get(spec, v)] + [y]
+            for p_, q_ in zip(hops, hops[1:]):
+                lines.append(dict(common, **{"from": p_, "to": q_}))
+    drawn = {x for l in lines for x in ([l.get("from"), l.get("to")] + (l.get("chain") or []))} | {n for r in rings for n in r["nodes"]}
+    for e in spec["equipment"]:                                        # a unit of communicating equipment left without a cable
+        if not any(e["id"] in (c["source"], c["destination"]) or e["id"] in (c.get("nodes") or []) for c in spec["connections"]):
+            continue
+        for uid in shown[e["id"]]:
+            if uid not in drawn and not any(uid.startswith(v + "-") for c in spec["connections"] for v in (c.get("via") or [])):
+                warnings.append("%s (%s) has no drawn connection: confirm how it connects (connect / answer)" % (uid, e["name"]))
     for l in lines:
         l.pop("_chain", None)
     for r in rings:
@@ -2009,6 +2087,9 @@ def main(argv=None):
     s.add_argument("id")
     for k in ("image", "image_source", "oem", "model"):
         s.add_argument("--" + k.replace("_", "-"), dest=k)
+    s = sub.add_parser("layout")
+    s.add_argument("spec")
+    s.add_argument("--io-display", choices=["auto", "representative", "individual"])
     s = sub.add_parser("stage")
     s.add_argument("spec")
     s.add_argument("name", choices=["project", "layers", "equipment", "connectivity", "review", "generated", "modify"])
@@ -2118,6 +2199,11 @@ def run(a):
         eq(spec, a.id)
         spec.setdefault("images", {})[a.id] = {k: getattr(a, k) for k in ("image", "image_source", "oem", "model") if getattr(a, k)}
         log(spec, "image", a.id)
+    elif a.cmd == "layout":
+        if a.io_display:
+            spec.setdefault("layout", {})["io_display"] = None if a.io_display == "auto" else a.io_display
+            log(spec, "layout", "io_display=%s" % a.io_display)
+        print(json.dumps(spec.get("layout", {})))
     elif a.cmd == "stage":
         spec["stage"] = a.name
         log(spec, "stage", a.name)

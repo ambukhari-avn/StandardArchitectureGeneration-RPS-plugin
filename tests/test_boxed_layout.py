@@ -42,16 +42,15 @@ class BoxedLayoutTests(unittest.TestCase):
         headings = [s for s in result["page"].shapes if (s["key"] or "").startswith("layer-heading:")]
         self.assertEqual(len(headings), 3)
         self.assertTrue(all(s["fill"] == R.TAB_BLUE and s["rounding"] > 0 for s in headings))
-        for heading in headings:
+        for heading in headings:                     # 7.2: a vertical strip inside the left side of its layer frame
             layer = panels[heading['key'].split(':')[1]]
-            self.assertLess(heading['y'], layer['y'] + layer['h'])
-            self.assertGreater(heading['y'] + heading['h'], layer['y'] + layer['h'])
+            self.assertGreater(heading['x'], layer['x'])
+            self.assertGreater(heading['y'], layer['y'])
+            self.assertLess(heading['y'] + heading['h'], layer['y'] + layer['h'])
+            self.assertGreater(heading['h'], heading['w'])
+        self.assertEqual(len({round(s['w'], 6) for s in headings}), 1)          # the same strip width in every layer
         names = [s for s in result['page'].shapes if (s['key'] or '').startswith('layer-name:')]
-        self.assertTrue(all(s['color'] == '#FFFFFF' and s['bold'] for s in names))
-        ordered = sorted(panels.values(), key=lambda s: s['y'], reverse=True)
-        for upper, lower in zip(ordered, ordered[1:]):
-            tab = next(s for s in headings if s['key'].split(':')[1] == lower['key'].split(':')[1])
-            self.assertLess(tab['y'] + tab['h'], upper['y'])
+        self.assertTrue(all(s['color'] == '#FFFFFF' and s['bold'] and s['text_angle'] == 90 for s in names))
 
     def test_nested_groups_keep_equipment_inside_parent_boxes(self):
         spec = self.sample()
@@ -67,16 +66,16 @@ class BoxedLayoutTests(unittest.TestCase):
             self.assertLessEqual(s["x"] + s["w"], p["x"] + p["w"] + 1e-6)
             self.assertLessEqual(s["y"] + s["h"], p["y"] + p["h"] + 1e-6)
 
-    def test_root_blocks_fill_layer_width_without_a_left_heading_column(self):
+    def test_root_blocks_fill_layer_width_right_of_the_heading_strip(self):
         spec = self.sample()
         shapes, _, warnings = B.prepare(spec, B.Components(), Cables(), os.path.join(ROOT, 'samples'))
         panels = B.apply_layers(spec, shapes, warnings)
         for panel in panels:
             roots = sorted([s for s in shapes if s.get('layer') == panel['id'] and not s.get('parent')], key=lambda s: s['x'])
-            self.assertAlmostEqual(roots[0]['x'], R.PAD)
+            self.assertAlmostEqual(roots[0]['x'], panel['head_w'] + R.HEAD_GAP)
             self.assertAlmostEqual(roots[-1]['x'] + roots[-1]['w'], B.AREA_W - R.PAD)
             for shape in roots:
-                self.assertGreaterEqual(shape['y'], panel['y'] + (.60 if panel['desc'] else .30) - 1e-6)
+                self.assertGreaterEqual(shape['y'], panel['y'] + min(R.PAD, panel['h'] * .08) - 1e-6)
                 self.assertLessEqual(shape['y'] + shape['h'], panel['y'] + panel['h'] - min(R.PAD, panel['h'] * .08) + 1e-6)
 
     def test_shared_hardwire_preserves_six_connections_and_ends_at_box_edges(self):
@@ -122,14 +121,28 @@ class BoxedLayoutTests(unittest.TestCase):
         result = self.build(spec)
         trunks = [c for c in result["display_connections"] if c["a"] == "instruments"]
         self.assertEqual(len(trunks), 2)
-        self.assertEqual({c["b"] for c in trunks}, {"io-box", "__rack_io2"})
+        self.assertEqual({c["b"] for c in trunks}, {"io-box", "io2"})            # 7.5: the lone rack has no box of its own
         self.assertEqual(sorted(len(c["source_connections"]) for c in trunks), [1, 5])
 
-    def test_external_device_links_are_promoted_to_container_boundaries(self):
+    def test_external_device_links_are_promoted_to_visible_container_boundaries(self):
+        spec = self.sample()
+        result = self.build(spec)
+        promoted = [c for c in result["display_connections"] if c.get("source_connections")]
+        self.assertTrue(promoted)
+        by_key = {s["key"]: s for s in result["page"].shapes if s["key"]}
+        for c in promoted:                           # every promoted end is a box that is actually drawn
+            for end in (c["a"], c["b"]):
+                self.assertIn("shape:" + end, by_key)
+
+    def test_loose_avanceon_equipment_has_no_box(self):
         spec = B.load_json(os.path.join(ROOT, "samples", "reference_quality.json"))
         result = self.build(spec)
-        wire = next(c for c in result["display_connections"] if c.get("source_connections") == [("sw", "plc")])
-        self.assertEqual((wire["a"], wire["b"]), ("__equipment_scada", "__equipment_control"))
+        keys = {s["key"] for s in result["page"].shapes if s["key"]}
+        self.assertNotIn("shape:__equipment_scada", keys)          # 7.4: equipment sits directly in the layer
+        self.assertNotIn("shape:__equipment_control", keys)
+        self.assertIn("shape:__equipment_field", keys)              # field group keeps the representative-cable boundary
+        wire = next(c for c in result["display_connections"] if {c["a"], c["b"]} & {"plc", "__equipment_control"})
+        self.assertEqual({wire["a"], wire["b"]}, {"sw", "plc"})    # a cable never ends on an invisible arrangement
 
     def test_racks_in_one_common_io_box_share_one_representative_cable(self):
         spec = self.sample()

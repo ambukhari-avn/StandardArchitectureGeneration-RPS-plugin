@@ -1,0 +1,112 @@
+{
+ "_note": "Approved Avanceon header/footer/logo geometry (Phase 9). Builds stop if these change. Regenerate only for an approved template change: python scripts/qa.py --lock",
+ "elements": {
+  "frame": {
+   "box": [
+    0.12,
+    0.12,
+    16.295,
+    11.453
+   ],
+   "fill": null,
+   "line": "#073878",
+   "lw": 2.25,
+   "pattern": 1
+  },
+  "title": {
+   "box": [
+    0.3,
+    10.913,
+    15.935,
+    0.62
+   ],
+   "color": "#073878",
+   "bold": true
+  },
+  "footer-frame": {
+   "box": [
+    0.3,
+    0.3,
+    15.935,
+    1.1
+   ],
+   "fill": "#FFFFFF",
+   "line": "#27369B",
+   "lw": 1.5,
+   "pattern": 1
+  },
+  "footer-card:title": {
+   "box": [
+    0.3,
+    0.3,
+    7.0,
+    1.1
+   ],
+   "fill": null,
+   "line": null,
+   "lw": 0.75,
+   "pattern": 1
+  },
+  "footer-divider:notes": {
+   "box": [
+    7.3,
+    0.3,
+    0.0,
+    1.1
+   ],
+   "fill": null,
+   "line": "#27369B",
+   "lw": 1.5,
+   "pattern": 1
+  },
+  "footer-card:notes": {
+   "box": [
+    7.3,
+    0.3,
+    4.5,
+    1.1
+   ],
+   "fill": null,
+   "line": null,
+   "lw": 0.75,
+   "pattern": 1
+  },
+  "footer-divider:legend": {
+   "box": [
+    11.8,
+    0.3,
+    0.0,
+    1.1
+   ],
+   "fill": null,
+   "line": "#27369B",
+   "lw": 1.5,
+   "pattern": 1
+  },
+  "footer-card:legend": {
+   "box": [
+    11.8,
+    0.3,
+    4.435,
+    1.1
+   ],
+   "fill": null,
+   "line": null,
+   "lw": 0.75,
+   "pattern": 1
+  },
+  "logo": {
+   "box": [
+    0.4,
+    0.674,
+    1.43,
+    0.352
+   ],
+   "fill": null,
+   "line": null,
+   "lw": 0.75,
+   "pattern": 1,
+   "sha256": "a2f7d81615b4d4ddeebb4a2b413a175639e70e6bdd83ca893e81be73b743683a"
+  }
+ }
+}

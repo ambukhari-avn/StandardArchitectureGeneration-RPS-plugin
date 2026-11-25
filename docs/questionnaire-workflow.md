@@ -125,3 +125,10 @@ arch_spec.py to-diagram spec.json --out diagram.json               # then rebuil
 
 Unrelated equipment, quantities, connections and ids are untouched; the header and footer are regenerated from the same project
 record with the new revision.
+
+## Examples and acceptance tests
+
+`python scripts/examples.py samples/examples` runs four complete questionnaires (Phase 11 tests A-D: simple PLC, redundant PLC,
+architecture with a DMZ, and a revision) and writes for each the questionnaire transcript with the review, the editable request, the
+specification, diagram.json, the Visio file and its preview. `tests/test_acceptance.py` checks them automatically (test E adds the
+visual checks every build runs); the previews are still inspected by eye.

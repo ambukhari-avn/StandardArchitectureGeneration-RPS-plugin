@@ -51,11 +51,11 @@ class Page:
         png_size(path)                              # fail now if it is not a PNG
         return self.add("image", "icon", x, y, w, h, parent, image=path, fill=None, line=None, **kw)
 
-    def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None, arrow=False):
-        """Polyline; arrow=True puts a filled arrowhead on the last point."""
+    def line(self, pts, color, pattern=1, lw=1.0, parent=None, key=None, arrow=False, arrow_start=False):
+        """Polyline; arrow=True puts a filled arrowhead on the last point, arrow_start=True one on the first point."""
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
         return self.add("line", "line", min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys), parent,
-                        pts=pts, line=color, lw=lw, pattern=pattern, key=key, arrow=arrow)
+                        pts=pts, line=color, lw=lw, pattern=pattern, key=key, arrow=arrow, arrow_start=arrow_start)
 
 
 def _f(v):
@@ -112,6 +112,8 @@ def shape_xml(s, rid=None):
           "<Cell N='FillPattern' V='%d'/>" % (1 if filled else 0), "<Cell N='FillForegnd' V='%s'/>" % (s["fill"] or "#FFFFFF")]
     if s.get("arrow"):
         c += ["<Cell N='EndArrow' V='4'/>", "<Cell N='EndArrowSize' V='2'/>"]
+    if s.get("arrow_start"):
+        c += ["<Cell N='BeginArrow' V='4'/>", "<Cell N='BeginArrowSize' V='2'/>"]
     c += ["<Cell N='%s' V='0.02'/>" % n for n in ("LeftMargin", "RightMargin", "TopMargin", "BottomMargin")]
     c.append("<Cell N='VerticalAlign' V='%d'/>" % s["valign"])
     if s["rounding"]:

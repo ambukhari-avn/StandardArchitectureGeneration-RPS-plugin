@@ -1,5 +1,7 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
+Version 1.7.0 also applies the Phase 7-12 appearance rules: vertical navy layer headings, content- and cable-sized layers, no boxes around Avanceon equipment, a representative I/O rack where the topology allows, control-layer order I/O → PLC → switches → FO panels, a field layer with instruments only, configurable arrowheads, separated cable tracks, automatic drawing checks on every build (`defect:` lines) and a locked header/footer/logo template. Acceptance examples A-D (questionnaire transcript, request, specification, Visio and preview) are in `samples/examples/`. The previous release is preserved on the `release/v1.6.0` branch.
+
 Version 1.7.0 adds the [standardized architecture questionnaire](docs/questionnaire-workflow.md): project details, any combination of Purdue layers (now with separate Level 5 External and custom layers), equipment per layer, dynamically generated connectivity questions, an editable review/request, generation from a structured specification (`scripts/arch_spec.py`, `architecture_spec.json`) and targeted revisions that keep unrelated equipment and ids.
 
 Version 1.4.0 adds the [mandatory drawing rules](docs/mandatory-drawing-rules.md), representative hardwire labels and explanatory notes. Technical topology review supplements structural checks. Previously fixed images, page fitting, header/footer styling, scope colours and cable colours are preserved.
