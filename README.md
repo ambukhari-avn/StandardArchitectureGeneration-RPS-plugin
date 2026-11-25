@@ -1,5 +1,18 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
+**Current version: 1.7.1** (the same release for Claude and ChatGPT). Install both from the same `main` commit:
+
+| Where | What to install | How to confirm the version |
+|---|---|---|
+| Claude | `/plugin marketplace update rps-architecture`, then update `architecture-diagram`, then start a new session | `/plugin` shows architecture-diagram 1.7.1 |
+| ChatGPT (custom GPT) | Replace **both** the instructions (`chatgpt-plugin/instructions.md`) and the knowledge file (`arch_plugin_1.7.1.zip`) | The instructions start with "version 1.7.1"; the zip contains `arch_plugin/VERSION` = 1.7.1 |
+
+Never mix an old zip with new instructions (or the reverse): the GPT stops and says so. Previous releases: branches `release/v1.7.0` and `release/v1.6.0`.
+
+## Version history
+
+Version 1.7.1 shows one version everywhere so Claude and ChatGPT installs cannot mix releases: the marketplace entry, the instructions and Claude skill header, a `VERSION` file inside the ChatGPT zip and the zip name (`arch_plugin_1.7.1.zip`). The GPT refuses to draw when its instructions and zip differ; `make_package.py` and `tests/test_version.py` stop on any mismatch. No drawing changes from 1.7.0.
+
 Version 1.7.0 also applies the Phase 7-12 appearance rules: vertical navy layer headings, content- and cable-sized layers, no boxes around Avanceon equipment, a representative I/O rack where the topology allows, control-layer order I/O → PLC → switches → FO panels, a field layer with instruments only, configurable arrowheads, separated cable tracks, automatic drawing checks on every build (`defect:` lines) and a locked header/footer/logo template. Acceptance examples A-D (questionnaire transcript, request, specification, Visio and preview) are in `samples/examples/`. The previous release is preserved on the `release/v1.6.0` branch.
 
 Version 1.7.0 adds the [standardized architecture questionnaire](docs/questionnaire-workflow.md): project details, any combination of Purdue layers (now with separate Level 5 External and custom layers), equipment per layer, dynamically generated connectivity questions, an editable review/request, generation from a structured specification (`scripts/arch_spec.py`, `architecture_spec.json`) and targeted revisions that keep unrelated equipment and ids.
@@ -19,7 +32,7 @@ Version 1.1.0 uses the latest [boxed reference layout](docs/reference-layout.md)
 ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. The **footer**, **cable colours**, and **approved image library** provide consistent defaults across diagrams. Fixed pictures change only when the prompt explicitly requests it.
 
 ## Install
-- **ChatGPT:** create a custom GPT with `chatgpt-plugin/instructions.md` as its instructions and `arch_plugin.zip` plus the client's Word
+- **ChatGPT:** create a custom GPT with `chatgpt-plugin/instructions.md` as its instructions and `arch_plugin_1.7.1.zip` plus the client's Word
   document as knowledge, with Code Interpreter on. Steps in [docs/setup.md](docs/setup.md).
 - **Claude (Claude Code / desktop app), needs Python 3:**
   ```

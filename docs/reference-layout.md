@@ -1,4 +1,4 @@
-# Boxed reference layout (1.6.0)
+# Boxed reference layout (1.7.0)
 
 The current default follows `reference-style.png`. Bold white layer names, turned 90 degrees, sit in a vertical navy heading strip (#001477) on the left of each full-width pale layer frame (#F5FAFF, blue border #27369B); every strip has the same width and stays inside its frame (7.2). Other equipment headings remain navy (#073878). Client/existing-system groups use pale orange (#FFE5B5) and orange borders (#FF8800). Cable colours and their solid/dashed classifications remain unchanged in `data/cable_types.json`.
 

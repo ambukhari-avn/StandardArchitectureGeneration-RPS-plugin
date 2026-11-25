@@ -3,6 +3,8 @@ name: architecture-diagram
 description: Make an editable one-page A3 Visio (.vsdx) system-architecture diagram (for example a Purdue-model diagram) from the user's request, with the team's fixed footer and cable colours. Use whenever the user asks for an architecture diagram or a Visio file of a system.
 ---
 
+**Avanceon Architecture Diagram plugin — version 1.7.1** (Claude plugin; the ChatGPT package carries the same version).
+
 Follow the user's request and the fixed image-library policy below. It only adds six things to the result (pictures are welcome too, see the end):
 
 1. **Footer.** Match the three joined rectangular footer sections in `docs/reference-style.png`: logo and project/document metadata on the left, Notes in the middle, Legend on the right. Scope swatches sit inside the Legend section. Use the values supplied for End User, Client, Project, Document Name, Prepared by, Checked by, Approved by, Revision and Sheet. Missing values print TBC. Client and a known End User share the upper metadata entry; Size / Rev / Sheet share the bottom entry. Footer labels/headings are bold, values are regular, and dividers are light blue.

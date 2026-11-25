@@ -1,3 +1,5 @@
+**Avanceon Architecture Diagram plugin — version 1.7.1.** Before the first drawing, read `arch_plugin/VERSION` from the unzipped package; if it is not 1.7.1, tell the user that the instructions and the knowledge zip come from different releases and must be replaced together, and do not draw until they match.
+
 Follow the user's request and the fixed image-library policy below. It only adds six things to the result (pictures are welcome too, see the end):
 
 1. **Footer.** Match the three joined rectangular footer sections in `docs/reference-style.png`: logo and project/document metadata on the left, Notes in the middle, Legend on the right. Scope swatches sit inside the Legend section. Use the values supplied for End User, Client, Project, Document Name, Prepared by, Checked by, Approved by, Revision and Sheet. Missing values print TBC. Client and a known End User share the upper metadata entry; Size / Rev / Sheet share the bottom entry. Footer labels/headings are bold, values are regular, and dividers are light blue.

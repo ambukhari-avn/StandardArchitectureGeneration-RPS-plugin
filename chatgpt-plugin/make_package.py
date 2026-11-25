@@ -2,7 +2,7 @@
 
 Zip what ChatGPT's code tool needs to validate a spec and draw the .vsdx: scripts, data, base, the example diagram and the format reference.
 
-    python chatgpt-plugin/make_package.py [out.zip]      (default: Downloads\\out\\arch_plugin.zip)
+    python chatgpt-plugin/make_package.py [out.zip]      (default: Downloads\\out\\arch_plugin_<version>.zip)
 
 Upload the zip to the chat; the instructions tell the model to unzip it and run scripts/build_diagram.py.
 Standard library only.
@@ -47,6 +47,12 @@ def write_skill():
     """skills/architecture-diagram/SKILL.md for the Claude plugin, made from instructions.md so both platforms share one text."""
     with open(os.path.join(ROOT, "chatgpt-plugin", "instructions.md"), encoding="utf-8") as fh:
         body = fh.read().strip()
+    v = version()
+    gpt_head = body.split("\n", 1)[0]
+    if not gpt_head.startswith("**Avanceon Architecture Diagram plugin \u2014 version %s.**" % v):
+        raise SystemExit("instructions.md must start with the version %s header" % v)
+    body = body.replace(gpt_head, "**Avanceon Architecture Diagram plugin \u2014 version %s** (Claude plugin; the ChatGPT package carries "
+                                  "the same version)." % v, 1)
     for old, new in SWAPS:
         if old not in body:
             raise SystemExit("instructions.md changed: update SWAPS in make_package.py (missing: %s)" % old[:50])
@@ -59,11 +65,42 @@ def write_skill():
         fh.write(SKILL_HEAD + body)
 
 
+def version():
+    """The release version. Single source: .claude-plugin/plugin.json."""
+    import json
+    with open(os.path.join(ROOT, ".claude-plugin", "plugin.json"), encoding="utf-8") as fh:
+        return json.load(fh)["version"]
+
+
+def version_mismatches():
+    """Every place a user can see the version must show the same one, so Claude and ChatGPT installs never mix releases."""
+    import json
+    v, out = version(), []
+    with open(os.path.join(ROOT, "plugin.json"), encoding="utf-8") as fh:
+        if json.load(fh).get("version") != v:
+            out.append("plugin.json")
+    with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json"), encoding="utf-8") as fh:
+        if any(p.get("version") != v for p in json.load(fh)["plugins"]):
+            out.append(".claude-plugin/marketplace.json")
+    with open(os.path.join(ROOT, "chatgpt-plugin", "instructions.md"), encoding="utf-8") as fh:
+        text = fh.read()
+    if not text.startswith("**Avanceon Architecture Diagram plugin \u2014 version %s.**" % v) or "if it is not %s," % v not in text:
+        out.append("chatgpt-plugin/instructions.md (header)")
+    with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
+        if "**Current version: %s**" % v not in fh.read():
+            out.append("README.md (Current version)")
+    return out
+
+
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.expanduser("~"), "Downloads", "out", "arch_plugin.zip")
+    bad = version_mismatches()
+    if bad:
+        sys.exit("version %s is not shown in: %s. Update them together, then run this again." % (version(), ", ".join(bad)))
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.expanduser("~"), "Downloads", "out", "arch_plugin_%s.zip" % version())
     write_skill()
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for full, rel in files():
             z.write(full, "arch_plugin/" + rel.replace(os.sep, "/"))
+        z.writestr("arch_plugin/VERSION", version() + "\n")
     print("wrote %s (%d files, %.1f MB)" % (out, len(z.namelist()), os.path.getsize(out) / 1e6))

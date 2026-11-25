@@ -1,6 +1,7 @@
 """Behaviour checks for the new default reference layout and grouped wiring."""
 import copy
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -235,6 +236,8 @@ class BoxedLayoutTests(unittest.TestCase):
                 instructions = source.read()
             with open(os.path.join(tmp, "chatgpt-plugin", "instructions.md"), "w", encoding="utf-8") as target:
                 target.write(instructions)
+            os.makedirs(os.path.join(tmp, ".claude-plugin"))                 # the release version is read from here
+            shutil.copy(os.path.join(ROOT, ".claude-plugin", "plugin.json"), os.path.join(tmp, ".claude-plugin", "plugin.json"))
             with patch.object(pack, "ROOT", tmp):
                 pack.write_skill()
             with open(os.path.join(tmp, "skills", "architecture-diagram", "SKILL.md"), encoding="utf-8") as generated:
