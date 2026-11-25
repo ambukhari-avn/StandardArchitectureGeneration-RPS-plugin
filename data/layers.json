@@ -1,10 +1,17 @@
 {
- "_note": "Standard layers, top to bottom (Purdue). Each is drawn as a label column (LEVEL n, name, description) beside a white row. Style is fixed in scripts/build_diagram.py.",
+ "_note": "Standard layers, top to bottom (Purdue). Level 5 External and Level 4 Enterprise are separate layers; Level 3.5 DMZ is a distinct layer and never implies any equipment. A diagram may add project-specific layers with \"custom_layers\" (see docs/diagram-format.md); all layers are drawn in descending level order. Style is fixed in scripts/build_diagram.py.",
  "layers": [
+  {
+   "id": "external",
+   "label": "External Layer",
+   "level": "Level 5",
+   "name": "External / Corporate / Cloud",
+   "desc": "External, Corporate & Cloud Systems"
+  },
   {
    "id": "enterprise",
    "label": "Enterprise Layer",
-   "level": "Level 4-5",
+   "level": "Level 4",
    "name": "Enterprise",
    "desc": "Business Planning & Logistics"
   },

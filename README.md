@@ -1,5 +1,7 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
+Version 1.7.0 adds the [standardized architecture questionnaire](docs/questionnaire-workflow.md): project details, any combination of Purdue layers (now with separate Level 5 External and custom layers), equipment per layer, dynamically generated connectivity questions, an editable review/request, generation from a structured specification (`scripts/arch_spec.py`, `architecture_spec.json`) and targeted revisions that keep unrelated equipment and ids.
+
 Version 1.4.0 adds the [mandatory drawing rules](docs/mandatory-drawing-rules.md), representative hardwire labels and explanatory notes. Technical topology review supplements structural checks. Previously fixed images, page fitting, header/footer styling, scope colours and cable colours are preserved.
 
 Version 1.3.1 fits root equipment blocks across the available page width with equal narrow margins. Descriptions use a shallow row above the blocks, and the layout reserves no blank left column.

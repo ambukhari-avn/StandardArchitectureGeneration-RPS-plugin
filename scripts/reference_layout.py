@@ -96,10 +96,10 @@ def apply_layers(spec, shapes, warnings, B):
         if any(s.get("layer") or s.get("parent") for s in shapes):
             raise B.BuildError('shapes use "layer" but the file has no "layers" list')
         return []
-    table = B.load_layers()
+    table = B.layer_table(spec)
     ids = [t["id"] for t in table]
     if not isinstance(wanted, list) or not wanted or any(w not in ids for w in wanted) or len(set(wanted)) != len(wanted):
-        raise B.BuildError('"layers" must be a list of distinct standard layer ids')
+        raise B.BuildError('"layers" must be a list of distinct layer ids (standard or custom_layers) from: %s' % ", ".join(ids))
     by_id = {s["id"]: s for s in shapes}
     _WIRED.update(pairs=[(str(c.get("from")), str(c.get("to"))) for c in spec.get("lines", []) if isinstance(c, dict)],
                   parent={s["id"]: s.get("parent") for s in shapes}, cache={})

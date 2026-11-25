@@ -285,6 +285,36 @@ def load_layers(path=LAYERS_PATH):
         return json.load(fh)["layers"]
 
 
+def level_number(level):
+    """'Level 3.5' -> 3.5; a plain number is returned as a float; anything unreadable -> None."""
+    if isinstance(level, (int, float)) and not isinstance(level, bool):
+        return float(level)
+    m = re.search(r"-?\d+(?:\.\d+)?", str(level or ""))
+    return float(m.group()) if m else None
+
+
+def layer_table(spec):
+    """The standard layers plus the file's optional "custom_layers", highest level first (top of the page). A custom layer is
+    {"id", "level", "name", "desc"}; its level is a number or "Level n" (for example 2.5) and places it between the standard ones."""
+    table = [dict(t) for t in load_layers()]
+    custom = spec.get("custom_layers", [])
+    if not isinstance(custom, list):
+        raise BuildError("custom_layers must be a list")
+    known = {t["id"] for t in table}
+    for c in custom:
+        if not isinstance(c, dict) or not isinstance(c.get("id"), str) or not c["id"].strip():
+            raise BuildError("each custom_layers entry needs a text id")
+        if c["id"] in known:
+            raise BuildError("custom layer id %r is already used" % c["id"])
+        if level_number(c.get("level")) is None:
+            raise BuildError("custom layer %r needs a level such as 2.5 or \"Level 2.5\"" % c["id"])
+        known.add(c["id"])
+        lv = c["level"] if isinstance(c["level"], str) else "Level %g" % float(c["level"])
+        name = str(c.get("name") or c["id"])
+        table.append(dict(id=c["id"], label=name, level=lv, name=name, desc=str(c.get("desc", c.get("description", ""))), custom=True))
+    return sorted(table, key=lambda t: -(level_number(t.get("level")) or 0.0))     # stable: equal levels keep their listed order
+
+
 def apply_layers(spec, shapes, warnings):
     """Stack the requested layers in the standard order so together they fill the whole drawing area, and place the shapes tagged with
     a layer: spread evenly across the layer's width and centred in its height. Returns the panels [{id, label, x, y, w, h}]
@@ -300,7 +330,7 @@ def apply_layers(spec, shapes, warnings):
         if tagged:
             raise BuildError('shapes use "layer" but the file has no "layers" list, e.g. "layers": ["scada", "control", "field"]')
         return []
-    table = load_layers()
+    table = layer_table(spec)
     ids = [t["id"] for t in table]
     if not isinstance(wanted, list) or not wanted or any(w not in ids for w in wanted) or len(set(wanted)) != len(wanted):
         raise BuildError('"layers" must be a list of distinct layer ids from: %s' % ", ".join(ids))

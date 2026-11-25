@@ -12,7 +12,7 @@ import sys
 import zipfile
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-KEEP = ("scripts", "data", "base", "samples", os.path.join("docs", "diagram-format.md"),
+KEEP = ("scripts", "data", "base", "samples", os.path.join("docs", "diagram-format.md"), os.path.join("docs", "questionnaire-workflow.md"),
         os.path.join("docs", "mandatory-drawing-rules.md"), os.path.join("docs", "equipment-sizing-rules.md"), os.path.join("docs", "web-first-images.md"), os.path.join("docs", "fixed-library.md"), os.path.join("docs", "reference-layout.md"), os.path.join("docs", "reference-style.png"), os.path.join("docs", "reference-dashes.png"))
 SKIP = ("__pycache__", ".pyc", "import_dataset.py", "xlsx_reader.py")
 
@@ -38,7 +38,9 @@ SWAPS = (("following docs/diagram-format.md in the attached arch_plugin.zip", "f
          ("extract the zip (for example to /mnt/data) and run", "save it in a temporary folder (not the user's output folder) and run"),
          ("python arch_plugin/scripts/build_diagram.py /mnt/data/diagram.json --out /mnt/data/Architecture.vsdx",
           'python "${CLAUDE_PLUGIN_ROOT}/scripts/build_diagram.py" <temporary folder>/diagram.json --out Architecture.vsdx'),
-         ("Give the user only Architecture.vsdx.", "Tell the user where Architecture.vsdx is (in the working folder)."))
+         ("Give the user only Architecture.vsdx and architecture_spec.json (keep the specification for later revisions).",
+          "Tell the user where Architecture.vsdx is (in the working folder) and keep architecture_spec.json next to it for later revisions."),
+         ("python arch_plugin/scripts/arch_spec.py", 'python "${CLAUDE_PLUGIN_ROOT}/scripts/arch_spec.py"'))
 
 
 def write_skill():
