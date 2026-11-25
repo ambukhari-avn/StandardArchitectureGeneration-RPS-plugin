@@ -54,10 +54,10 @@ See [setup.md](setup.md). Short version:
 
 ## Making a change (release routine)
 1. Change the instruction (`instructions.md`) or the code. Never hand-edit `SKILL.md`.
-2. `python -m unittest discover -s tests` (expect 57 tests, 2 skipped).
+2. `python -m unittest discover -s tests` (expect 218 tests, 2 skipped).
 3. `python chatgpt-plugin/make_package.py` (rebuilds the zip in `Downloads\out` and rewrites `SKILL.md`).
 4. Raise `version` in `.claude-plugin/plugin.json` (Claude only notices updates when the version changes).
-5. Commit, merge to `main` (Claude reads `main`), push.
+5. Commit, merge to `main` (Claude reads `main`), push. Before merging, keep the previous release on a `release/vX.Y.Z` branch so it stays recoverable.
 6. Claude users: refresh the marketplace, update the plugin, start a new session. ChatGPT users: replace the custom GPT's instruction and knowledge file by hand.
 
 Typical changes: a new cable colour or type (`data/cable_types.json`), a new library component (update the workbook, run `import_dataset.py`), a footer change (`scripts/footer.py`, then every user must update), wording of the instruction.
