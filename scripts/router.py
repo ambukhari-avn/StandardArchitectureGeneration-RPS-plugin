@@ -617,8 +617,8 @@ def _route_all(requests, rects, bounds, boxes, clear, keepout=()):
         for n in auto:
             q = requests[n]
             bend = 40.0 if q.get("straight") else BEND
-            sa = [q["from_side"]] if q.get("from_side") else list(SIDES)
-            sb = [q["to_side"]] if q.get("to_side") else list(SIDES)
+            sa = [q["from_side"]] if q.get("from_side") else [x for x in SIDES if x not in q.get("a_reserved", ())] or list(SIDES)
+            sb = [q["to_side"]] if q.get("to_side") else [x for x in SIDES if x not in q.get("b_reserved", ())] or list(SIDES)
             fa, fb = fixed.get((n, "a")), fixed.get((n, "b"))
             res = _one(grid, occ, q["a"], q["b"], sa, sb, {fa[1]: fa[0]} if fa else None, {fb[1]: fb[0]} if fb else None, bend, q.get("home"))
             if res is None:

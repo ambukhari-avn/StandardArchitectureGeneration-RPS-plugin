@@ -39,7 +39,9 @@ class DrawTests(unittest.TestCase):
 
     def test_component_without_picture_is_a_rectangle_with_its_label(self):
         pg = Page()
-        ids = draw_component(pg, self.c, "ps_pressure_switch", 1.0, 1.0, 1.4, 0.6)
+        c = Components()                    # every library component has a picture since 1.7.2: simulate one without
+        c.by_id["ps_pressure_switch"] = dict(c.by_id["ps_pressure_switch"], picture=None, illustration=False)
+        ids = draw_component(pg, c, "ps_pressure_switch", 1.0, 1.0, 1.4, 0.6)
         self.assertEqual(len(ids), 1)
         s = pg.shapes[0]
         self.assertEqual((s["kind"], s["text"]), ("rect", "PS - Pressure switch"))

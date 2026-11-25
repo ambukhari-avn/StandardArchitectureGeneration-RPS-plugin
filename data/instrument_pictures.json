@@ -1,0 +1,417 @@
+{
+ "_note": "Offline instrument illustrations (v1.7.2), made by scripts/instrument_art.py. Fallbacks only: web-first pictures come first. 'balloons' are ISA-5.1 tag bubbles used when an instrument has no picture at all; an instrument is never drawn with the generic equipment icon.",
+ "components": [
+  {
+   "id": "pressure_transmitter",
+   "label": "Pressure transmitter",
+   "picture": "instruments/pressure_transmitter.png",
+   "sha256": "729177d4017acf4b65ae76d04409ba2b8176c361260825a37b471a9e05ec9b15",
+   "illustration": true
+  },
+  {
+   "id": "pit_pressure_indicating_transmitter",
+   "label": null,
+   "picture": "instruments/pit_pressure_indicating_transmitter.png",
+   "sha256": "729177d4017acf4b65ae76d04409ba2b8176c361260825a37b471a9e05ec9b15",
+   "illustration": true
+  },
+  {
+   "id": "dp_transmitter_3_valve_manifold",
+   "label": "DP transmitter with 3-valve manifold",
+   "picture": "instruments/dp_transmitter_3_valve_manifold.png",
+   "sha256": "ccc054f6ab169de7d91b566cb08fb3e1c3a7611f2a265dbac9ec18b1b545353f",
+   "illustration": true
+  },
+  {
+   "id": "dpit_differential_pressure_indicating_transmitter",
+   "label": null,
+   "picture": "instruments/dpit_differential_pressure_indicating_transmitter.png",
+   "sha256": "ccc054f6ab169de7d91b566cb08fb3e1c3a7611f2a265dbac9ec18b1b545353f",
+   "illustration": true
+  },
+  {
+   "id": "temperature_transmitter_rtd_in_thermowell",
+   "label": "Temperature transmitter (RTD in thermowell)",
+   "picture": "instruments/temperature_transmitter_rtd_in_thermowell.png",
+   "sha256": "e5245dac675a5d1f6bb1234cc67d1f1f01a84d1dc5a1c81aef35a53cda780f1e",
+   "illustration": true
+  },
+  {
+   "id": "tit_temperature_indicating_transmitter",
+   "label": null,
+   "picture": "instruments/tit_temperature_indicating_transmitter.png",
+   "sha256": "e5245dac675a5d1f6bb1234cc67d1f1f01a84d1dc5a1c81aef35a53cda780f1e",
+   "illustration": true
+  },
+  {
+   "id": "electromagnetic_flowmeter",
+   "label": "Electromagnetic flowmeter",
+   "picture": "instruments/electromagnetic_flowmeter.png",
+   "sha256": "5effe41689b81526b57b388c6ead0cf3c03d233151fca942bbb8721bfb908c94",
+   "illustration": true
+  },
+  {
+   "id": "flowmeters_electromagnetic",
+   "label": null,
+   "picture": "instruments/flowmeters_electromagnetic.png",
+   "sha256": "5effe41689b81526b57b388c6ead0cf3c03d233151fca942bbb8721bfb908c94",
+   "illustration": true
+  },
+  {
+   "id": "fit_flow_indicating_transmitter",
+   "label": null,
+   "picture": "instruments/fit_flow_indicating_transmitter.png",
+   "sha256": "5effe41689b81526b57b388c6ead0cf3c03d233151fca942bbb8721bfb908c94",
+   "illustration": true
+  },
+  {
+   "id": "coriolis_flowmeter",
+   "label": "Coriolis flowmeter",
+   "picture": "instruments/coriolis_flowmeter.png",
+   "sha256": "6bcd4cf73a5a8cf718e59196147ee0b47d906a488627b30f407483bb6a4f210d",
+   "illustration": true
+  },
+  {
+   "id": "vortex_flowmeter",
+   "label": "Vortex flowmeter",
+   "picture": "instruments/vortex_flowmeter.png",
+   "sha256": "d728a1cddbd5814180fcdcc6ebd67dc75c7a2ca61d66d7a31efb87cc592db73c",
+   "illustration": true
+  },
+  {
+   "id": "clamp_on_ultrasonic_flowmeter",
+   "label": "Clamp-on ultrasonic flowmeter",
+   "picture": "instruments/clamp_on_ultrasonic_flowmeter.png",
+   "sha256": "8e062b766f87817c0b0ffb740d8ceca319ee1878dfd94533b64870a56b3602e1",
+   "illustration": true
+  },
+  {
+   "id": "radar_level_transmitter",
+   "label": "Radar level transmitter",
+   "picture": "instruments/radar_level_transmitter.png",
+   "sha256": "d83e9d929eebf84365db97a5ab6ed6a1a7f62b7518658ab15a14da9ef47cb523",
+   "illustration": true
+  },
+  {
+   "id": "lt_level_transmitter",
+   "label": null,
+   "picture": "instruments/lt_level_transmitter.png",
+   "sha256": "d83e9d929eebf84365db97a5ab6ed6a1a7f62b7518658ab15a14da9ef47cb523",
+   "illustration": true
+  },
+  {
+   "id": "ultrasonic_level_transmitter",
+   "label": "Ultrasonic level transmitter",
+   "picture": "instruments/ultrasonic_level_transmitter.png",
+   "sha256": "1250512ee6a51ad9a77ffff5bbaa6e4fd2635f66eb9e1143da07eaf9ee731d6f",
+   "illustration": true
+  },
+  {
+   "id": "submersible_level_probe",
+   "label": "Submersible level probe",
+   "picture": "instruments/submersible_level_probe.png",
+   "sha256": "6fb9adaf44a0077eaf62e1ef4cb61e44b7608799e7c165da1d18f808be136a31",
+   "illustration": true
+  },
+  {
+   "id": "level_switch",
+   "label": "Level switch",
+   "picture": "instruments/level_switch.png",
+   "sha256": "7dcc1e9af665df9d97ce33aa0d301954140bf41b318b0920cdd4b3b6e8825e78",
+   "illustration": true
+  },
+  {
+   "id": "ls_level_switch",
+   "label": null,
+   "picture": "instruments/ls_level_switch.png",
+   "sha256": "7dcc1e9af665df9d97ce33aa0d301954140bf41b318b0920cdd4b3b6e8825e78",
+   "illustration": true
+  },
+  {
+   "id": "ps_pressure_switch",
+   "label": "Pressure switch",
+   "picture": "instruments/ps_pressure_switch.png",
+   "sha256": "bcb4e61cd32da38443bc12d3c421e776750d69a6a0beb0f878eb1128ec131854",
+   "illustration": true
+  },
+  {
+   "id": "ts_temperature_switch",
+   "label": "Temperature switch",
+   "picture": "instruments/ts_temperature_switch.png",
+   "sha256": "7735854fc2278bc6499bf2a23104a4da9936c73f990ee72bb84af5755e1fc363",
+   "illustration": true
+  },
+  {
+   "id": "fs_flow_switch",
+   "label": "Flow switch",
+   "picture": "instruments/fs_flow_switch.png",
+   "sha256": "809b691d949146e70208d5e97fc31490a2f9117cdb5d14d1b6e15935a75b7295",
+   "illustration": true
+  },
+  {
+   "id": "ph_orp_sensor_transmitter",
+   "label": "pH / ORP sensor and transmitter",
+   "picture": "instruments/ph_orp_sensor_transmitter.png",
+   "sha256": "153dcb9c34695be3bf693add7e130e65927e1b5af9db99020edd78fd0ceac34f",
+   "illustration": true
+  },
+  {
+   "id": "chlorine_analyzer_sensor",
+   "label": "Chlorine analyzer",
+   "picture": "instruments/chlorine_analyzer_sensor.png",
+   "sha256": "4dfb884207ccd6ab6a5ac9f3851c916182b045226ed28a3f2de96cc050a2dbf5",
+   "illustration": true
+  },
+  {
+   "id": "chlorine_analyzer_analyzer_l0",
+   "label": null,
+   "picture": "instruments/chlorine_analyzer_analyzer_l0.png",
+   "sha256": "4dfb884207ccd6ab6a5ac9f3851c916182b045226ed28a3f2de96cc050a2dbf5",
+   "illustration": true
+  },
+  {
+   "id": "turbidity_meter",
+   "label": "Turbidity meter",
+   "picture": "instruments/turbidity_meter.png",
+   "sha256": "2dc1ba0d905d3267c91ed4691be64953641f5a2ecadb122c9a6fb79fd515c005",
+   "illustration": true
+  },
+  {
+   "id": "turbidity_analyzer",
+   "label": null,
+   "picture": "instruments/turbidity_analyzer.png",
+   "sha256": "2dc1ba0d905d3267c91ed4691be64953641f5a2ecadb122c9a6fb79fd515c005",
+   "illustration": true
+  },
+  {
+   "id": "h2s_analyzer",
+   "label": "H2S analyzer",
+   "picture": "instruments/h2s_analyzer.png",
+   "sha256": "09fe3b4eebff476102fcf4019c64d0f1239de61b937ca31cd63fe1c6b0f0be03",
+   "illustration": true
+  },
+  {
+   "id": "gas_detector",
+   "label": "Gas detector",
+   "picture": "instruments/gas_detector.png",
+   "sha256": "830df0005105186be82fcc385277d67d2c12873ecbd23e57f26fffc9356a8d25",
+   "illustration": true
+  },
+  {
+   "id": "flame_detector",
+   "label": "Flame detector",
+   "picture": "instruments/flame_detector.png",
+   "sha256": "84ba55aae52a284a7db6bb4abbb142e690589ce3b53f78babad714a82c204705",
+   "illustration": true
+  },
+  {
+   "id": "vibration_sensor",
+   "label": "Vibration sensor",
+   "picture": "instruments/vibration_sensor.png",
+   "sha256": "4b69e735baeaa6d9bfb5623bd10766e1cb003977c6c12b4faa0312eb5cddf522",
+   "illustration": true
+  },
+  {
+   "id": "proximity_sensor",
+   "label": "Proximity sensor",
+   "picture": "instruments/proximity_sensor.png",
+   "sha256": "fd6c3b6000feaf9595bd5916cee356462dd9c03f62be9f9e86aab40b1d78ff83",
+   "illustration": true
+  },
+  {
+   "id": "power_meter",
+   "label": "Power meter",
+   "picture": "instruments/power_meter.png",
+   "sha256": "3dce261492c4e3ddbfda4951dbb25ac41a0eea7c45b0450d8d00672fd4962bd4",
+   "illustration": true
+  },
+  {
+   "id": "mov_motor_operated_valve",
+   "label": "Motor operated valve",
+   "picture": "instruments/mov_motor_operated_valve.png",
+   "sha256": "a046f1f7daea7b3e605e4f3cf1817ab1d9753ad2e8a0741191fc43f93fd78052",
+   "illustration": true
+  },
+  {
+   "id": "control_valve",
+   "label": "Control valve",
+   "picture": "instruments/control_valve.png",
+   "sha256": "57adc2fd95d9700d9a5c8cf975c1ec145e00ac71bef6150d54326fa8ed3cfc26",
+   "illustration": true
+  },
+  {
+   "id": "analyzer",
+   "label": "Analyzer",
+   "picture": "instruments/analyzer.png",
+   "sha256": "e4197888a3b08d2831f2ea240e2017f14e6b3b61b12403086c47890ccf744a9e",
+   "illustration": true
+  }
+ ],
+ "balloons": [
+  {
+   "tag": "PT",
+   "picture": "instruments/isa_pt.png",
+   "sha256": "f2e3f0f554189f7527ef678f802f4df515210bd416474168a4dd9447dc69ac90"
+  },
+  {
+   "tag": "PIT",
+   "picture": "instruments/isa_pit.png",
+   "sha256": "d1f2f4870278f20630095f6aed1c6ccc7ad6d4443384f3a56b4062964da71e61"
+  },
+  {
+   "tag": "PS",
+   "picture": "instruments/isa_ps.png",
+   "sha256": "21bb10786b943bb6d0689cb84eae68dc4ba1d0e2681266a1fd688ce198e78e4c"
+  },
+  {
+   "tag": "DPT",
+   "picture": "instruments/isa_dpt.png",
+   "sha256": "14c9212ea684364d806cf739ab4b41ca644aa5f8f6bdce9de0d8d94882303812"
+  },
+  {
+   "tag": "TT",
+   "picture": "instruments/isa_tt.png",
+   "sha256": "b250d2ae5c0dc0f6d861b57f36b237e7996778b3259fcc497e100f7b174084c7"
+  },
+  {
+   "tag": "TIT",
+   "picture": "instruments/isa_tit.png",
+   "sha256": "4c1b85b5a51cdd201b4f69beaf2c52b9a87eeeb4bd11f36ef88c479371e37825"
+  },
+  {
+   "tag": "TE",
+   "picture": "instruments/isa_te.png",
+   "sha256": "6d7231401d42b7a00bdcfd74155c4f5358b40610361bbc46a4c0a1831185d5c6"
+  },
+  {
+   "tag": "TS",
+   "picture": "instruments/isa_ts.png",
+   "sha256": "9d045413427a71f89f0ac93154fb1f2fd4fadc8181d27e645af09072be7d68fe"
+  },
+  {
+   "tag": "FT",
+   "picture": "instruments/isa_ft.png",
+   "sha256": "47458b364ad75993dffa35ca142bbb6418d37b648feb430081b7678c07fcdeac"
+  },
+  {
+   "tag": "FIT",
+   "picture": "instruments/isa_fit.png",
+   "sha256": "8c78f4a30c02068ccbb40d4d5e62da77656c1e98ad7e549cb965307daf9057be"
+  },
+  {
+   "tag": "FE",
+   "picture": "instruments/isa_fe.png",
+   "sha256": "7de6e35b68ac63adf8b4479116d3baf78629852f7b6d30f7625f50116a83b0f5"
+  },
+  {
+   "tag": "FS",
+   "picture": "instruments/isa_fs.png",
+   "sha256": "1a5e84e4874d31da5ee952cf6d7143fc6975aba52670aac6dff96cae40edd3af"
+  },
+  {
+   "tag": "LT",
+   "picture": "instruments/isa_lt.png",
+   "sha256": "4dcc6515fd99826cee5cc2fee03ba9aa5c207764263d3c37f03700abee52fbae"
+  },
+  {
+   "tag": "LIT",
+   "picture": "instruments/isa_lit.png",
+   "sha256": "dda3fb6ec5b3106056ddc750673c4358947ccce26b4d714348f186d8c4447558"
+  },
+  {
+   "tag": "LS",
+   "picture": "instruments/isa_ls.png",
+   "sha256": "687d963c47aae7044dbb419294e47b17186dc1caee02112ca12a7d5d02e48bd7"
+  },
+  {
+   "tag": "AT",
+   "picture": "instruments/isa_at.png",
+   "sha256": "1e73c2eab7e081010de63872197ce79689baaf082dc54ee4a583e3bbd2b08810"
+  },
+  {
+   "tag": "AIT",
+   "picture": "instruments/isa_ait.png",
+   "sha256": "a979d867f903bdb9c1cb3c80ecd9e4e1f3a1b14bc09456c6073258bb0fb45e04"
+  },
+  {
+   "tag": "XV",
+   "picture": "instruments/isa_xv.png",
+   "sha256": "8712dbb1fa2f1b83b2cb7b50620a68859c87471741ca51afa536c498671a5b70"
+  },
+  {
+   "tag": "MOV",
+   "picture": "instruments/isa_mov.png",
+   "sha256": "498b08fb1efc6d9a2086dd8ab4ba27403fab028618d62a2cf8d285fba3a60ac1"
+  },
+  {
+   "tag": "FCV",
+   "picture": "instruments/isa_fcv.png",
+   "sha256": "60ec1ce573ac5cdb09968c7d217cf10751a7146936500fcbba1241a587701356"
+  },
+  {
+   "tag": "PCV",
+   "picture": "instruments/isa_pcv.png",
+   "sha256": "dce3799a2020291e0694c4a75f12ec1f4552348469adc0022a4ec99746821b94"
+  },
+  {
+   "tag": "LCV",
+   "picture": "instruments/isa_lcv.png",
+   "sha256": "a96fef381446ca4027e14d48632e84d086576c52f89a2e48d56eab4129e17430"
+  },
+  {
+   "tag": "TCV",
+   "picture": "instruments/isa_tcv.png",
+   "sha256": "471a3a37b5b346430b84d6743602533000d71f69cdd944d5f7a2ccaee21991a7"
+  },
+  {
+   "tag": "HV",
+   "picture": "instruments/isa_hv.png",
+   "sha256": "f93e1d71a8a95df2d7f5890d9cdf06733726db93c572cc48601a998126aa0db3"
+  },
+  {
+   "tag": "GD",
+   "picture": "instruments/isa_gd.png",
+   "sha256": "719198928614a14384817c00b95ce80dd9faa9d42aa601701fe8e75fdee4a716"
+  },
+  {
+   "tag": "FD",
+   "picture": "instruments/isa_fd.png",
+   "sha256": "e450853fdf1f944ad35b50e36f7d86f5f6a378779e5eccf3cc5d77da49215e7a"
+  },
+  {
+   "tag": "VT",
+   "picture": "instruments/isa_vt.png",
+   "sha256": "54658221b537281632b28bc7332a269b8b116ec3a12c96bb3c0ab8e6cd1dce56"
+  },
+  {
+   "tag": "ZS",
+   "picture": "instruments/isa_zs.png",
+   "sha256": "73209d7cddab5135e1ae6f537c1cca2b437ad617d6e47e23507f5d3d5a56132c"
+  },
+  {
+   "tag": "JT",
+   "picture": "instruments/isa_jt.png",
+   "sha256": "8309cdba1ca00fc95685dbe416044881281044b862854a781ef4c023eb8c40cc"
+  },
+  {
+   "tag": "IT",
+   "picture": "instruments/isa_it.png",
+   "sha256": "bee46022245cb68df4a595a780a2be26fd0811d668151b75915d9c78810e2bbd"
+  },
+  {
+   "tag": "ST",
+   "picture": "instruments/isa_st.png",
+   "sha256": "9f845bc2775dc2a9ba0c4aa99c7a90891516c2810e181ae5cb7923d8dec9fb21"
+  },
+  {
+   "tag": "HS",
+   "picture": "instruments/isa_hs.png",
+   "sha256": "dca967d9a826d860cc83899e33d19e99a4b42afb0942168f8ff1e973854993bf"
+  },
+  {
+   "tag": "I",
+   "picture": "instruments/isa_i.png",
+   "sha256": "4170562b7553329e10f962b01533fdcce5cb965bb5e1da16963664148aa35a2c"
+  }
+ ]
+}

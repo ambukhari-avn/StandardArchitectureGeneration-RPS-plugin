@@ -4,8 +4,9 @@ These rules apply to every device picture in the default reference layout: SCADA
 
 ## A. Size and allocation
 
+0. **Minimum displayed sizes (v1.7.2, blocking).** `data/equipment_sizes.json` gives each category (plc, io, rtu, dcs, server, workstation, hmi, switch, firewall, fo_panel, instrument) a minimum longest visible side on the A3 page and a row weight. Layer heights are allocated to meet every minimum first, then spare space is shared; dense diagrams switch to the compact arrangement automatically. A picture still below its minimum is a blocking defect: nothing is written.
 1. **Fill the available space.** Size equipment to fill the space it is given. Do not leave tiny pictures inside large, mostly empty containers.
-2. **Equal image areas per row.** Devices in the same row each receive an equal share of the usable row width and the same image-area height. A nested group is weighted by the devices it holds, so a four-rack block gets four equal shares.
+2. **Equal image areas per row, after minimums.** Devices in the same row receive equal shares of the usable row width unless a category minimum (rule 0) needs more; PLCs and remote I/O have the highest weight. A nested group is weighted by the devices it holds, so a four-rack block gets four equal shares.
 3. **Proportional enlargement.** Each picture is fitted to the largest size that fits its allocated area with its aspect ratio preserved. Never stretch or distort a device to fill both dimensions.
 4. **Visible bounds.** Size by the visible equipment. Ignore transparent margins and blank background when calculating the displayed size. The approved fixed image files stay unchanged (they are placed byte-for-byte; only the placement is calculated from the visible bounds).
 5. **80–90 % occupancy.** Target 90 % of the image area in the limiting dimension: a tall transmitter nearly fills the available height, a wide rack nearly fills the available width.

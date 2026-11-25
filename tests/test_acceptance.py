@@ -77,7 +77,7 @@ class TestB_RedundantPLC(unittest.TestCase):
         run, r, d, _ = built("B_redundant_plc")
         racks = [s for s in d["shapes"] if s["id"].startswith("EQ-005")]
         self.assertEqual(len(racks), 1)
-        self.assertEqual(racks[0]["sublabel"], "Qty: 4")
+        self.assertEqual(racks[0]["sublabel"], "Qty: 4 \u00b7 Dual redundant network")   # topology in the caption (v1.7.2)
         self.assertNotIn("G-IO", [s.get("parent", "")[:4] for s in racks])          # not inside a separate box
         self.assertEqual(A.eq(run.spec, "EQ-005")["quantity"], 4)                   # the specification keeps all four
 
@@ -85,7 +85,7 @@ class TestB_RedundantPLC(unittest.TestCase):
         run, r, d, _ = built("B_redundant_plc")
         to_rack = [l for l in d["lines"] if l.get("to") == "EQ-005-1" and l["cable"] == "ethernet"]
         self.assertEqual({l["from"] for l in to_rack}, {"EQ-006-1", "EQ-006-2"})     # both switches reach the I/O network
-        self.assertTrue(any("Dual redundant network" in l.get("label", "") for l in to_rack))
+        self.assertFalse(any(l.get("label") for l in to_rack))       # no crowded link label; the caption carries the topology
         plc_sw = {(l["from"], l["to"]) for l in d["lines"] if l["from"].startswith("EQ-004") and l["to"].startswith("EQ-006")}
         self.assertEqual(plc_sw, {("EQ-004-1", "EQ-006-1"), ("EQ-004-2", "EQ-006-2")})
 

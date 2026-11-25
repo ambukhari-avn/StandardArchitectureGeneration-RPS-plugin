@@ -25,7 +25,7 @@
   {
    "id": "G-FIELD",
    "kind": "group",
-   "label": "Field Instruments",
+   "label": "",
    "scope": "avanceon",
    "layer": "field",
    "columns": 3
@@ -34,6 +34,7 @@
    "id": "EQ-001-1",
    "parent": "G-FIELD",
    "label": "Pressure Transmitters",
+   "category": "instrument",
    "sublabel": "(Qty 4)",
    "component": "pressure_transmitter",
    "image": "../pictures/pressure_transmitter.png",
@@ -43,6 +44,7 @@
    "id": "EQ-002-1",
    "parent": "G-FIELD",
    "label": "Temperature Transmitters",
+   "category": "instrument",
    "sublabel": "(Qty 3)",
    "component": "temperature_transmitter_rtd_in_thermowell"
   },
@@ -50,6 +52,7 @@
    "id": "EQ-003-1",
    "parent": "G-FIELD",
    "label": "Flow Transmitters",
+   "category": "instrument",
    "sublabel": "(Qty 2)",
    "component": "electromagnetic_flowmeter",
    "image": "../pictures/flow_transmitter.png",
@@ -68,6 +71,7 @@
    "id": "EQ-004-1",
    "parent": "G-control",
    "label": "PLC",
+   "category": "plc",
    "row": 1,
    "component": "rack_plc"
   },
@@ -75,6 +79,7 @@
    "id": "EQ-005-1",
    "parent": "G-control",
    "label": "Remote I/O Rack",
+   "category": "io",
    "row": 2,
    "component": "remote_i_o_drop"
   },
@@ -82,6 +87,7 @@
    "id": "EQ-006-1",
    "parent": "G-control",
    "label": "Industrial Ethernet Switch",
+   "category": "switch",
    "row": 0,
    "component": "ethernet_switch"
   },
@@ -89,6 +95,7 @@
    "id": "EQ-007-1",
    "parent": "G-control",
    "label": "HMI Panel",
+   "category": "hmi",
    "row": 1
   }
  ],
@@ -125,6 +132,80 @@
    "cable": "ethernet",
    "from": "EQ-007-1",
    "to": "EQ-006-1"
+  }
+ ],
+ "logical_links": [
+  {
+   "id": "CN-001",
+   "units": [
+    [
+     "EQ-001-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "hardwired",
+   "pattern": "group",
+   "drawn": true
+  },
+  {
+   "id": "CN-002",
+   "units": [
+    [
+     "EQ-002-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "hardwired",
+   "pattern": "group",
+   "drawn": true
+  },
+  {
+   "id": "CN-003",
+   "units": [
+    [
+     "EQ-003-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "hardwired",
+   "pattern": "group",
+   "drawn": true
+  },
+  {
+   "id": "CN-004",
+   "units": [
+    [
+     "EQ-006-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "each-to-first",
+   "drawn": true
+  },
+  {
+   "id": "CN-005",
+   "units": [
+    [
+     "EQ-004-1",
+     "EQ-006-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-006",
+   "units": [
+    [
+     "EQ-007-1",
+     "EQ-006-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "each-to-one",
+   "drawn": true
   }
  ]
 }

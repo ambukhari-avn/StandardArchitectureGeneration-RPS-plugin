@@ -19,6 +19,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import footer
 import qa
+import components as components_mod
 import pictures
 import router
 import reference_layout
@@ -39,7 +40,7 @@ SMALL_EQUIPMENT = 0.50                                  # a displayed device nar
 MIN_DEVICE_H = 0.60                                     # a device cell shorter than this cannot hold a picture and a caption
 GENERIC_ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "icons", "generic_device.png")
 BEHIND = ("zone", "group")                              # drawn first, behind the lines and shapes
-SEE_THROUGH = ("zone", "group", "pill")                 # lines may run over these; they are not obstacles
+SEE_THROUGH = ("zone", "group", "pill", "bus")                 # lines may run over these; they are not obstacles
 GROUP_FILL, GROUP_LINE, PILL_BLUE = "#FFFFFF", reference_layout.NAVY, "#1456C0"
 PILL_LIGHT_FILL, PILL_LIGHT_LINE, PILL_LIGHT_TEXT = "#D9E9FB", "#2F6FD0", "#0B3C8C"
 CABLE_LW = 1.75                                         # bold reference-style cables, in points
@@ -84,6 +85,17 @@ class Warnings(list):
         self.notices = []
 
 
+INSTRUMENT_WORDS = re.compile(r"transmitter|sensor|meter|gauge|switch(?!es\b)|valve|detector|analy[sz]er|probe|thermo|\b(?:pt|tt|ft|lt|"
+                              r"pit|tit|fit|lit|dpt|mov|xv)\b", re.I)
+
+
+def is_instrument(s):
+    """A field instrument: by declared category, by component layer, or (field layer) by its caption."""
+    if s.get("category"):
+        return s["category"] == "instrument"
+    return s.get("layer") == "field" or bool(INSTRUMENT_WORDS.search(str(s.get("label") or ""))) and "ethernet" not in str(s.get("label")).lower()
+
+
 def fixed_for_override(s):
     return bool(s.get("image_override"))
 
@@ -103,6 +115,97 @@ def expand_chains(spec):
         else:
             out.append(c)
     spec["lines"] = out
+
+
+BUS_STEP = .14          # vertical spacing between the trunks of two buses below one row (dual-homed equipment)
+BUS_FIRST = .16         # first trunk below the bottom of its members
+BUS_DROP = .16          # horizontal offset between the drops of two buses from one device
+
+
+def parse_buses(spec, shapes, cables, errors):
+    """Item 4: common graphical network buses. "buses": [{"id", "members": [device ids in one row], "cable", "label"}]. The engine
+    reserves a corridor below the members, draws a trunk with a drop to every member, and lets cables end on the bus id."""
+    out = []
+    raw = spec.get("buses", [])
+    if not isinstance(raw, list):
+        errors.append('"buses" must be a list')
+        return out
+    by_id = {s["id"]: s for s in shapes}
+    for n, b in enumerate(raw, 1):
+        where = "bus %d" % n
+        if not isinstance(b, dict) or not isinstance(b.get("id"), str) or not b["id"].strip():
+            errors.append("%s needs a text id" % where)
+            continue
+        if b["id"] in by_id:
+            errors.append("%s: id %r is already a shape id" % (where, b["id"]))
+            continue
+        members = [str(m) for m in b.get("members", [])]
+        bad = [m for m in members if m not in by_id or by_id[m]["kind"] != "box"]
+        if len(members) < 2 or bad:
+            errors.append("%s: members must be two or more device ids%s" % (where, (" (not devices: %s)" % ", ".join(bad)) if bad else ""))
+            continue
+        try:
+            cables.line_style(b.get("cable"))
+        except Exception:
+            errors.append("%s: unknown cable %r" % (where, b.get("cable")))
+            continue
+        out.append({"id": b["id"], "kind": "bus", "members": members, "cable": b["cable"], "label": str(b.get("label", "")).strip(),
+                    "key": "bus:" + b["id"], "x": 0., "y": 0., "w": .1, "h": .02, "where": where, "web": False, "pic": None})
+    spec["_buses"] = out
+    return out
+
+
+def place_buses(buses, shapes, by_id, spec_lines=()):
+    """After layout: trunk geometry for every bus (below its members; several buses sharing members stack downwards)."""
+    order = {}
+    for b in buses:
+        for m in b["members"]:
+            order.setdefault(m, []).append(b["id"])
+    for b in buses:
+        rects = [rect_of(by_id[m]) for m in b["members"]]
+        k = max(order[m].index(b["id"]) for m in b["members"])
+        bottom = min(r[1] for r in rects)                              # page coordinates (y up)
+        y = bottom - BUS_FIRST - k * BUS_STEP
+        drops = []
+        for m, r in zip(b["members"], rects):
+            mine = order[m]
+            dx = (mine.index(b["id"]) - (len(mine) - 1) / 2) * BUS_DROP
+            pr = picture_rect(by_id[m])
+            drops.append((pr[0] + pr[2] / 2 + dx, r[1]))
+        xs = [x for x, _ in drops]
+        for c in spec_lines:                                          # the trunk reaches every device that connects to the bus,
+            for hub_end, bus_end in (("from", "to"), ("to", "from")):  # so its uplink is a straight vertical drop
+                if str(c.get(bus_end)) == b["id"] and str(c.get(hub_end)) in by_id:
+                    hr = rect_of(by_id[str(c[hub_end])])
+                    xs.append(hr[0] + hr[2] / 2)
+        # the shape record keeps layout coordinates like every other shape (rect_of converts them back to the page)
+        b.update(x=min(xs) - MARGIN, y=TOP - (y + .01), w=max(.1, max(xs) - min(xs)), h=.02, trunk_y=y, drops=drops,
+                 layer=by_id[b["members"][0]].get("layer") or layer_of(by_id, b["members"][0]))
+        b["parent"] = None
+    return buses
+
+
+def draw_buses(page, buses, cables):
+    """Trunks with hops where another bus's drop crosses them, and the drops; returns the polylines (for the drawing checks)."""
+    drawn = []
+    for b in buses:
+        color, pattern = cables.line_style(b["cable"])
+        crossings = sorted(x for o in buses if o is not b for x, y0 in o["drops"]
+                           if o["trunk_y"] < b["trunk_y"] < y0 and b["x"] + MARGIN + .05 < x < b["x"] + MARGIN + b["w"] - .05)
+        x0 = b["x"] + MARGIN
+        pts = [(x0, b["trunk_y"])]
+        for x in crossings:                                           # the trunk hops over a drop of the other bus
+            pts += [(x - .05, b["trunk_y"]), (x - .03, b["trunk_y"] + .04), (x + .03, b["trunk_y"] + .04), (x + .05, b["trunk_y"])]
+        pts.append((x0 + b["w"], b["trunk_y"]))
+        page.line(pts, color, pattern, lw=CABLE_LW, key="bus:%s" % b["id"])
+        drawn.append(pts)
+        for x, y0 in b["drops"]:
+            page.line([(x, y0), (x, b["trunk_y"])], color, pattern, lw=CABLE_LW, key="bus:%s|drop" % b["id"])
+            drawn.append([(x, y0), (x, b["trunk_y"])])
+        if b["label"]:
+            w = len(b["label"]) * .058 + .06
+            page.text(b["x"] + MARGIN - w - .06, b["trunk_y"] - .07, w, .14, b["label"], size=6.5, bold=True, halign=2, key="bus-label:%s" % b["id"])
+    return drawn
 
 
 def prepare(spec, comps, cables, spec_dir):
@@ -186,6 +289,12 @@ def prepare(spec, comps, cables, spec_dir):
             pic, note = pictures.prepare(pic, background=background)
             if note:
                 warnings.append("%s: %s" % (where, note))
+        elif not pic and kind == "box" and is_instrument(s):            # C10: an instrument is never shown as unrelated equipment
+            tag = str(s.get("tag") or components_mod.instrument_tag(label or s.get("label")))
+            pic = comps.balloons.get(tag) or comps.balloons.get("I")
+            key = "balloon:" + tag
+            warnings.notices.append("%s: no instrument picture; drawn as its ISA-5.1 balloon %r. Source the actual instrument picture "
+                                    "(web first) or give a library component" % (where, tag))
         elif not pic and kind == "box":                                 # no picture given: a generic device icon, never a plain box
             pic, key = GENERIC_ICON, "generic:" + sid
             warnings.append("%s: no picture (give \"component\" or \"image\"); a generic device icon is used" % where)
@@ -238,7 +347,10 @@ def prepare(spec, comps, cables, spec_dir):
                            layer=layer, auto_x=auto_x, line=line, sub=sub, scope=scope if scope in footer.SCOPE else None,
                            parent=str(parent) if parent else None, row=s.get("row"), columns=s.get("columns"),
                            placement=s.get("placement"), width_weight=s.get("width_weight"), solid=bool(s.get("solid")),
-                           max_width=s.get("max_width"), max_height=s.get("max_height"), frame=_frame(s, kind, scope, where, warnings)))
+                           max_width=s.get("max_width"), max_height=s.get("max_height"), frame=_frame(s, kind, scope, where, warnings),
+                           place=_place(s, where, errors), category=s.get("category"), tag=s.get("tag")))
+    buses = parse_buses(spec, shapes, cables, errors)
+    ids |= {b["id"] for b in buses}
     lines = []
     for n, c in enumerate(spec.get("lines", []), 1):
         where = "line %d" % n
@@ -255,15 +367,18 @@ def prepare(spec, comps, cables, spec_dir):
         except CableError as e:
             errors.append("%s: %s" % (where, e))
         via = []
-        for p in c.get("via", []):
+        if c.get("waypoints") is not None and c.get("via") is not None:
+            errors.append('%s: give "waypoints" or "via", not both' % where)
+        points = c.get("waypoints", c.get("via", []))     # item 6: locked waypoints (followed exactly, corners squared)
+        for p in points:
             if isinstance(p, list) and len(p) == 2 and None not in map(_num, p):
                 px, py = MARGIN + _num(p[0]), TOP - _num(p[1])
                 cx, cy = min(max(px, MARGIN), MARGIN + AREA_W), min(max(py, BOTTOM), TOP)
                 if abs(cx - px) > 0.005 or abs(cy - py) > 0.005:
                     warnings.append("%s: via point [%s, %s] is outside the drawing area; moved inside" % (where, p[0], p[1]))
                 via.append((cx, cy))
-        if len(via) != len(c.get("via", [])):
-            warnings.append("%s: some via points were not [x, y] numbers; ignored" % where)
+        if len(via) != len(points):
+            warnings.append("%s: some via/waypoint points were not [x, y] numbers; ignored" % where)
         sides = {}
         for key in ("from_side", "to_side"):
             v = c.get(key)
@@ -322,7 +437,7 @@ def layer_table(spec):
     return sorted(table, key=lambda t: -(level_number(t.get("level")) or 0.0))     # stable: equal levels keep their listed order
 
 
-def apply_layers(spec, shapes, warnings):
+def apply_layers(spec, shapes, warnings, boost=None):
     """Stack the requested layers in the standard order so together they fill the whole drawing area, and place the shapes tagged with
     a layer: spread evenly across the layer's width and centred in its height. Returns the panels [{id, label, x, y, w, h}]
     (inches from the top-left of the drawing area). No "layers" in the file: nothing happens and shapes stay where they were put."""
@@ -330,7 +445,10 @@ def apply_layers(spec, shapes, warnings):
     if style not in ("reference", "legacy"):
         raise BuildError('layout_style must be "reference" or "legacy"')
     if style == "reference":
-        return reference_layout.apply_layers(spec, shapes, warnings, sys.modules[__name__])
+        try:
+            return reference_layout.apply_layers(spec, shapes, warnings, sys.modules[__name__], boost=boost)
+        except reference_layout.PlacementError as e:
+            raise BuildError(str(e))
     wanted = spec.get("layers")
     tagged = [s for s in shapes if s["layer"] is not None]
     if wanted is None:
@@ -660,9 +778,12 @@ def separate(lines, paths, rect_of_id, obstacles, gap=0.08, run=0.2):
 
     def clash(n, i, axis, pos, lo, hi):
         for a in segs():
-            if a[0] != n and a[2] == axis and abs(a[3] - pos) < gap * .75 and min(a[5], hi) - max(a[4], lo) > .02:
+            if a[0] != n and a[2] == axis and abs(a[3] - pos) < gap - .004 and min(a[5], hi) - max(a[4], lo) > .02:
                 return True
         return False
+
+    def orthogonal(pts):
+        return all(abs(x0 - x1) < 1e-6 or abs(y0 - y1) < 1e-6 for (x0, y0), (x1, y1) in zip(pts, pts[1:]))
 
     def endpoint_ok(n, pts):
         a, b = rect_of_id(lines[n]["a"]), rect_of_id(lines[n]["b"])
@@ -676,7 +797,7 @@ def separate(lines, paths, rect_of_id, obstacles, gap=0.08, run=0.2):
         ss = segs()
         for k, a in enumerate(ss):
             for b in ss[k + 1:]:
-                if a[0] == b[0] or a[2] != b[2] or abs(a[3] - b[3]) >= gap * .75:
+                if a[0] == b[0] or a[2] != b[2] or abs(a[3] - b[3]) >= gap - .004:
                     continue
                 if min(a[5], b[5]) - max(a[4], b[4]) <= run:
                     continue
@@ -691,7 +812,7 @@ def separate(lines, paths, rect_of_id, obstacles, gap=0.08, run=0.2):
                     else:
                         pts[i], pts[i + 1] = (p0[0] + delta, p0[1]), (p1[0] + delta, p1[1])
                     # keep the neighbours orthogonal: a first/last segment slides its end along the equipment edge
-                    if not endpoint_ok(n, pts):
+                    if not orthogonal(pts) or not endpoint_ok(n, pts):
                         continue
                     own = (rect_of_id(lines[n]["a"]), rect_of_id(lines[n]["b"]))
                     if any(crosses(pts, r) for r in obstacles if r not in own):
@@ -729,7 +850,7 @@ def separate(lines, paths, rect_of_id, obstacles, gap=0.08, run=0.2):
                         trial[i], trial[i + 1] = (x0, y0 + delta), (x1, y1 + delta)
                     else:
                         trial[i], trial[i + 1] = (x0 + delta, y0), (x1 + delta, y1)
-                    if not endpoint_ok(m, trial):                         # (a straight cable slides both ends and stays straight)
+                    if not orthogonal(trial) or not endpoint_ok(m, trial):  # (a straight cable slides both ends and stays straight)
                         continue
                     own = (rect_of_id(lines[m]["a"]), rect_of_id(lines[m]["b"]))
                     if any(crosses(trial, r) for r in obstacles if r not in own):
@@ -749,6 +870,67 @@ def separate(lines, paths, rect_of_id, obstacles, gap=0.08, run=0.2):
     return paths
 
 
+def picture_rect(d):
+    """Page rectangle of the visible equipment picture inside a device (the caption sits below it)."""
+    import draw
+    x, y, w, h = rect_of(d)
+    if d["kind"] != "box" or not d.get("pic"):
+        return x, y, w, h
+    area_h = h - draw.LABEL_ZONE - (draw.SUB_ZONE if d.get("sub") else 0)
+    if area_h <= 0:
+        return x, y, w, h
+    try:
+        vw, vh = draw.visible_size(d["pic"], w, area_h, reference_layout.FILL)
+    except Exception:
+        return x, y, w, h
+    top = y + h
+    return x + (w - vw) / 2, top - area_h / 2 - vh / 2, vw, vh
+
+
+def snap_ends(lines, paths, by_id, margin=.06):
+    """Item 6 attachment points: a cable that ends on a device's top or bottom edge does so within the width of its visible picture
+    (not over empty caption space), and one on a side edge does so beside the picture. The end segment slides along the edge (a
+    straight cable gets a small jog half way so its other end stays put); the path stays orthogonal."""
+    def snap_first(c, pts):
+        """Snap pts[0] (the path's first end); returns the new path."""
+        if len(pts) < 2:
+            return pts
+        end, nxt = pts[0], pts[1]
+        dev = next((by_id[e] for e in (c["a"], c["b"]) if by_id.get(e) is not None and by_id[e]["kind"] == "box"
+                    and _on(end, rect_of(by_id[e]), .035)), None)
+        if dev is None:
+            return pts
+        px, py, pw, ph = picture_rect(dev)
+        (x0, y0), (x1, y1) = end, nxt
+        if abs(x0 - x1) < 1e-6:                                         # vertical end segment: within the picture's width
+            lo, hi = px + min(margin, pw / 3), px + pw - min(margin, pw / 3)
+            nx = min(max(x0, lo), hi)
+            if abs(nx - x0) < 1e-6:
+                return pts
+            if len(pts) == 2:
+                my = (y0 + y1) / 2
+                return [(nx, y0), (nx, my), (x1, my), (x1, y1)]
+            return [(nx, y0), (nx, y1)] + pts[2:]
+        if abs(y0 - y1) < 1e-6:                                         # horizontal end segment: beside the picture
+            lo, hi = py + min(margin, ph / 3), py + ph - min(margin, ph / 3)
+            ny = min(max(y0, lo), hi)
+            edge = px if x1 < px + pw / 2 else px + pw                  # and it reaches the picture's side (not the caption box edge)
+            if abs(ny - y0) < 1e-6:
+                return [(edge, y0)] + pts[1:] if abs(edge - x0) > 1e-6 and (x1 - edge) * (x1 - x0) > 0 else pts
+            x0 = edge if (x1 - edge) * (x1 - x0) > 0 else x0
+            if len(pts) == 2:
+                mx = (x0 + x1) / 2
+                return [(x0, ny), (mx, ny), (mx, y1), (x1, y1)]
+            return [(x0, ny), (x1, ny)] + pts[2:]
+        return pts
+    out = []
+    for c, pts in zip(lines, paths):
+        pts = snap_first(c, [tuple(p) for p in pts])
+        pts = snap_first(c, pts[::-1])[::-1]
+        out.append(_square(pts))
+    return out
+
+
 def _on(pt, r, tol=0.03):
     """True when point pt lies on (or just at) the border of rectangle r = (x, y, w, h)."""
     x, y, w, h = r
@@ -756,6 +938,28 @@ def _on(pt, r, tol=0.03):
     inside = x - tol <= px <= x + w + tol and y - tol <= py <= y + h + tol
     near = min(abs(px - x), abs(px - x - w), abs(py - y), abs(py - y - h)) <= tol
     return inside and near
+
+
+def layer_of(by_id, sid):
+    s = by_id.get(sid)
+    while s is not None and not s.get("layer") and s.get("parent"):
+        s = by_id.get(s["parent"])
+    return s.get("layer") if s is not None else None
+
+
+PLACE_KEYS = ("left_of", "right_of", "above", "below")
+
+
+def _place(s, where, errors):
+    """Relative placement constraints (item 3): {"left_of"|"right_of": id} order a row; "above"/"below" are row hints for the
+    generator (rows themselves come from "row")."""
+    p = s.get("place")
+    if p is None:
+        return None
+    if not isinstance(p, dict) or any(k not in PLACE_KEYS or not isinstance(v, str) for k, v in p.items()):
+        errors.append('%s: "place" must be an object with left_of / right_of / above / below shape ids' % where)
+        return None
+    return dict(p)
 
 
 def framed(s):
@@ -800,10 +1004,8 @@ def draw_shape(page, s):
         dpi = min(iw / image["w"], ih / image["h"])
         if modern:
             l, t, r, b = visible_box(s["pic"])
-            shown = max((r - l) * image["w"], (b - t) * image["h"])
-            if shown < SMALL_EQUIPMENT:
-                small = "%s: equipment is only %.2f in across on the page; reduce what shares its row or give its layer more weight" % (s["where"], shown)
-                warn = (warn + "; " + small) if warn else small
+            # v1.7.2: picture size is governed by the per-category minimums in data/equipment_sizes.json (blocking, qa.check_sizes);
+            # the former single SMALL_EQUIPMENT warning is retired so the two rules cannot disagree.
             if not s["web"] and dpi < 200:
                 quality = "%s: picture has %.0f pixels per displayed inch after enlargement; a sharper original would improve fine detail%s" % (
                     s["where"], dpi, " (approved fixed image left unchanged)" if s["key"].startswith("component:") else "")
@@ -842,11 +1044,84 @@ def keep_on_page(page, first_content, warnings):
     return moved
 
 
-def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template=True):
+class LayoutDefect(BuildError):
+    """A layout or quality problem the engine may correct itself (more room for the layers involved); carries those layers."""
+    def __init__(self, message, layers=(), defects=(), need=None, draft=None):
+        BuildError.__init__(self, message)
+        self.layers, self.defects, self.need, self.draft = set(layers), list(defects), dict(need or {}), draft
+
+
+CORRECTION_ATTEMPTS = 6
+BOOST_STEP = 1.35
+
+
+def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template=True, locked_layout=None):
+    """Build with mandatory quality checks (v1.7.2). Layout and quality defects are corrected automatically by giving the layers
+    involved more room and rebuilding; if defects remain after the correction passes, nothing is written (NOT BUILT). With
+    locked_layout (a signature from an approved preview), the Visio file is written only if the layout is identical to it."""
     comps, cables = comps or Components(), cables or Cables()
+    boost, history, last, last_draft = {}, [], [], [None]
+    for attempt in range(CORRECTION_ATTEMPTS):
+        try:
+            r = _build_once(spec, comps, cables, spec_dir, check_template, boost)
+        except LayoutDefect as e:
+            history.append(str(e).split("\n")[0])
+            last = e.defects or [str(e)]
+            need = e.need or {l: 1.0 for l in (e.layers or set(spec.get("layers") or []))}
+            worst = max(need.values()) if need else 1.0
+            for layer, ratio in need.items():                    # the layer furthest below its minimum gains most
+                boost[layer] = boost.get(layer, 1.0) * (1 + (BOOST_STEP - 1) * ratio / worst)
+            if attempt >= 1 and any("below the" in d or "too short" in d for d in (e.defects or [str(e)])):
+                boost["_compact"] = 1                                # still short of room: use the compact control arrangement
+            if e.draft is not None:
+                last_draft[0] = e.draft
+            continue
+        if attempt:
+            r["warnings"].append("automatic correction: %d rebuild(s) giving more room to %s (%s)" %
+                                 (attempt, ", ".join(sorted(boost)), "; ".join(history)))
+        r["corrections"] = history
+        if locked_layout is not None and r["layout"] != locked_layout:
+            raise BuildError("the layout differs from the approved preview (layout lock); build a new preview and have it approved, "
+                             "or rebuild from the approved diagram.json")
+        write_vsdx(r["page"], out, base, title=str(spec.get("project", {}).get("project", "Architecture")))
+        r["out"] = out
+        return r
+    err = BuildError("blocking quality defects remain after %d automatic correction passes (nothing was written):\n  %s" %
+                     (CORRECTION_ATTEMPTS, "\n  ".join(last[:15])))
+    err.draft = last_draft[0]                                           # for --draft: a preview of the failing layout, never a Visio file
+    raise err
+
+
+def _layers_named(text, shapes, lines=()):
+    """Layers of the shapes (or cable labels) a defect message names."""
+    by_id = {s["id"]: s for s in shapes}
+    found = set()
+    for sid in re.findall(r"[\w.:-]+", text):
+        s = by_id.get(sid)
+        while s is not None and not s.get("layer") and s.get("parent"):
+            s = by_id.get(s["parent"])
+        if s is not None and s.get("layer"):
+            found.add(s["layer"])
+    for c in lines:
+        if c.get("label") and c["label"] in text:
+            for end in (c["a"], c["b"]):
+                found |= _layers_named(end, shapes)
+    return found
+
+
+def _build_once(spec, comps, cables, spec_dir, check_template, boost):
     shapes, lines, warnings = prepare(spec, comps, cables, spec_dir)
-    panels = apply_layers(spec, shapes, warnings)
+    try:
+        panels = apply_layers(spec, shapes, warnings, boost)
+    except BuildError as e:
+        if "cannot fit its contents" in str(e):
+            raise LayoutDefect(str(e), _layers_named(str(e), shapes))
+        raise
     logical_connections = [dict(c) for c in lines]
+    by_id = {s["id"]: s for s in shapes}
+    buses = place_buses(spec.get("_buses", []), shapes, by_id, spec.get("lines", []))
+    for b in buses:                                                    # a cable may end on a bus (routed to its trunk)
+        shapes.append(b)
     lines = reference_layout.group_connections(spec, shapes, lines)
     by_id = {s["id"]: s for s in shapes}
     page = Page()
@@ -865,7 +1140,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template
     if missing:
         warnings.append("footer values printing TBC: %s; if the engineer or the documents gave any of them, add them to \"project\"" % ", ".join(missing))
     rings = prepare_rings(spec, shapes, cables)
-    used = sorted({c["cable"] for c in lines} | {r["cable"] for r in rings})
+    used = sorted({c["cable"] for c in lines} | {r["cable"] for r in rings} | {b["cable"] for b in spec.get("_buses", [])})
     try:
         footer.build_footer(page, spec.get("project", {}), cables.legend(used), notes, allow_tbc=True,
                             style="legacy" if spec.get("layout_style") == "legacy" else "reference")
@@ -878,10 +1153,14 @@ def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template
     containers = [s for s in shapes if s["kind"] in BEHIND]
     containers.sort(key=lambda s: -(s["w"] * s["h"]))                 # parents before nested children
     for s in containers:
-        w = draw_shape(page, s)
+        try:
+            w = draw_shape(page, s)
+        except ValueError as e:                                         # a cell too small to draw: correctable with more room
+            raise LayoutDefect("%s: %s" % (s["id"], e), _layers_named(s["id"], shapes))
         if w:
             warnings.append(w)
     placed = draw_rings(page, rings, by_id, cables, shapes, warnings)      # ring ellipses sit behind the lines and shapes
+    bus_paths = draw_buses(page, buses, cables)
     n_lines = 0
     obstacles = [rect_of(s) for s in shapes if s["kind"] not in SEE_THROUGH]
     x0 = MARGIN + (BAND_W + 0.05 if panels and spec.get('layout_style') == 'legacy' else 0.0)
@@ -901,6 +1180,7 @@ def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template
         normal_indices = [i for i in range(len(lines)) if i not in group_indices]
         routed = [None] * len(lines)
         boxes = [rect_of(s) for s in shapes if s["kind"] in ("group", "zone") and framed(s)] + [(MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]) for p in panels]
+        boxes += [(b["x"] + MARGIN, b["trunk_y"] - .01, b["w"], .02) for b in buses]     # cables keep clear of bus trunks
         def common_box(c):                                              # innermost group holding both ends: a cable between them stays inside it
             def chain(i):
                 out, s = [], by_id[i]
@@ -913,9 +1193,33 @@ def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template
                 if gid in up_b and framed(by_id[gid]):
                     return rect_of(by_id[gid])
             return None
+        panel_rect = {p["id"]: (MARGIN + p["x"], TOP - p["y"] - p["h"], p["w"], p["h"]) for p in panels}
+
+        def corridor(c):
+            """Item 6: the band of layers a cable connects (with the gaps between them) is its routing corridor; it never runs
+            through a layer it does not serve."""
+            rs = [panel_rect.get(layer_of(by_id, e)) for e in (c["a"], c["b"])]
+            if not all(rs):
+                return None
+            lo = min(r[1] for r in rs)
+            hi = max(r[1] + r[3] for r in rs)
+            return (MARGIN, lo, AREA_W, hi - lo)
+        reserved = {}                                                   # item 6: the facing sides of a directly linked pair (e.g. a
+        for c in lines:                                                 # redundancy sync link) belong to that link alone
+            if c.get("direct") and c["a"] in by_id and c["b"] in by_id:
+                ra, rb = rect_of(by_id[c["a"]]), rect_of(by_id[c["b"]])
+                if ra[0] + ra[2] <= rb[0]:
+                    reserved.setdefault(c["a"], set()).add("right")
+                    reserved.setdefault(c["b"], set()).add("left")
+                elif rb[0] + rb[2] <= ra[0]:
+                    reserved.setdefault(c["a"], set()).add("left")
+                    reserved.setdefault(c["b"], set()).add("right")
         for i, c in enumerate(lines):
             if not (c["via"] or c.get("from_side") or c.get("to_side") or c["straight"]):
-                reqs[i]["home"] = common_box(c)
+                reqs[i]["home"] = common_box(c) or corridor(c)
+            reqs[i]["corridor"] = corridor(c)
+            if not c.get("direct"):
+                reqs[i]["a_reserved"], reqs[i]["b_reserved"] = reserved.get(c["a"], ()), reserved.get(c["b"], ())
         keepout = []                                                    # group titles are text a cable must not run through
         for s in shapes:
             if s["kind"] == "group" and s["label"] and s.get("has_children") and framed(s):
@@ -951,9 +1255,23 @@ def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template
         if pts is None:
             pts = route(q["a"], q["b"], c["via"])
             if not c["via"]:
-                warnings.append("%s (%s to %s): no clear square route found; a plain one was drawn" % (c["where"], c["a"], c["b"]))
+                if not any(by_id[e]["kind"] == "bus" for e in (c["a"], c["b"])):   # bus uplinks are drawn directly afterwards
+                    warnings.append("%s (%s to %s): no clear square route found; a plain one was drawn" % (c["where"], c["a"], c["b"]))
         paths.append(pts)
     paths = [_square(p) for p in paths]
+    if spec.get("layout_style", "reference") == "reference":
+        paths = snap_ends(lines, paths, by_id)
+    for i, c in enumerate(lines):                                       # a bus uplink is a straight vertical drop to the trunk
+        bus = next((by_id[e] for e in (c["a"], c["b"]) if by_id[e]["kind"] == "bus"), None)
+        if bus is None:
+            continue
+        dev = by_id[c["b"] if bus["id"] == c["a"] else c["a"]]
+        x, y, w, h = rect_of(dev)
+        x = picture_rect(dev)[0] + picture_rect(dev)[2] / 2 - w / 2 if dev["kind"] == "box" else x
+        cx, ty = x + w / 2, bus["trunk_y"]
+        start = (cx, y) if y > ty else (cx, y + h)
+        pts = [start, (cx, ty)]
+        paths[i] = pts if bus["id"] == c["b"] else pts[::-1]
     if spec.get("layout_style", "reference") == "reference":
         paths = separate(lines, paths, lambda i: rect_of(by_id[i]), obstacles)
     drawn_paths = []
@@ -980,28 +1298,51 @@ def build(spec, base, out, comps=None, cables=None, spec_dir=".", check_template
                 if s["kind"] not in SEE_THROUGH and s["id"] not in (c["a"], c["b"]) and crosses(pts, rect_of(s)):
                     warnings.append("%s (%s to %s) passes through shape %r; add a \"via\" point to route round it" % (c["where"], c["a"], c["b"], s["id"]))
     n_lines += draw_ring_links(page, placed, by_id, cables, shapes, warnings)
-    for s in (s for s in shapes if s["kind"] not in BEHIND):
-        w = draw_shape(page, s)
+    for s in (s for s in shapes if s["kind"] not in BEHIND and s["kind"] != "bus"):
+        try:
+            w = draw_shape(page, s)
+        except ValueError as e:                                         # a cell too small to draw: correctable with more room
+            raise LayoutDefect("%s: %s" % (s["id"], e), _layers_named(s["id"], shapes))
         if w:
             warnings.append(w)
     warnings += ["shapes %r and %r overlap" % p for p in overlapping(shapes)]
-    cable_labels.draw(page, lines, paths, shapes, warnings, sys.modules[__name__])
+    try:
+        cable_labels.draw(page, lines, paths, shapes, warnings, sys.modules[__name__])
+    except BuildError as e:
+        if "cannot fit" in str(e):
+            raise LayoutDefect(str(e), _layers_named(str(e), shapes, lines), draft={"page": page, "qa": [str(e)]})
+        raise
     keep_on_page(page, n_footer, warnings)
     defects = []
     if spec.get("layout_style", "reference") == "reference":           # Phases 8, 9 and 11-E: automatic drawing checks
         defects += qa.check_cables(lines, drawn_paths, lambda i: rect_of(by_id[i]))
-        defects += qa.check_cable_spacing(lines, paths)
+        bus_lines = [{"a": b["id"], "b": b["id"], "cable": b["cable"]} for b in buses]
+        defects += qa.check_cable_spacing(lines + bus_lines, paths + [bp for bp in bus_paths[:0]] + [
+            [(b["x"] + MARGIN, b["trunk_y"]), (b["x"] + MARGIN + b["w"], b["trunk_y"])] for b in buses])
+        defects += qa.check_inside(paths + bus_paths, BOTTOM, TOP, MARGIN, MARGIN + AREA_W)
+        defects += qa.check_picture_ends(lines, paths, by_id, picture_rect, lambda pt, d: _on(pt, rect_of(d), .035))
         defects += qa.check_attachments(lines, paths)
         defects += qa.check_headings(page, panels)
         defects += qa.check_containers(shapes)
         defects += qa.check_text(page, BOTTOM)
         defects += qa.check_page(page)
+        defects += qa.check_sizes(shapes)
+        defects += qa.check_clearance(lines, paths, shapes, lambda i: rect_of(by_id[i]))
+        defects += qa.check_corridors(lines, paths, [r.get("corridor") for r in reqs], shapes, lambda i: rect_of(by_id[i]))
         if check_template:
             locked = qa.check_template(page)
             if locked:
                 raise BuildError("the approved header/footer template must not change:\n  " + "\n  ".join(locked))
-    write_vsdx(page, out, base, title=str(spec.get("project", {}).get("project", "Architecture")))
-    return {"out": out, "shapes": len(shapes), "lines": n_lines, "warnings": warnings, "notices": list(getattr(warnings, "notices", [])), "notes": notes, "page": page,
+        if defects:                                                    # blocking: corrected automatically or NOT BUILT
+            need = {}
+            for d in defects:
+                m = re.search(r"is ([\d.]+) in, below the ([\d.]+) in minimum", d)
+                ratio = float(m.group(2)) / max(.01, float(m.group(1))) if m else 1.1
+                for layer in _layers_named(d, shapes, lines):
+                    need[layer] = max(need.get(layer, 1.0), ratio)
+            raise LayoutDefect("%d quality defect(s): %s" % (len(defects), defects[0]), set(need), defects, need,
+                               draft={"page": page, "qa": defects})
+    return {"out": None, "shapes": len(shapes), "lines": n_lines, "layout": qa.layout_signature(page), "warnings": warnings, "notices": list(getattr(warnings, "notices", [])), "notes": notes, "page": page,
             "logical_connections": logical_connections, "display_connections": lines, "qa": defects}
 
 
@@ -1013,30 +1354,63 @@ def load_json(path):
         raise BuildError("cannot read %s: %s" % (path, e))
 
 
+def lock_path(out):
+    return os.path.splitext(out)[0] + ".layout.json"
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("spec")
     ap.add_argument("--base", default=os.path.join(ROOT, "base", "base.vsdx"))
     ap.add_argument("--out", help="output .vsdx (default: Downloads\\out\\<file name>.vsdx)")
-    ap.add_argument("--preview", action="store_true", help="also write a PNG preview next to the file (needs Pillow; development aid)")
+    ap.add_argument("--preview", action="store_true",
+                    help="also write the approval preview (PNG, rendered from the same drawing as the Visio file; needs Pillow) and the "
+                         "layout lock <out>.layout.json")
+    ap.add_argument("--locked-layout", metavar="LAYOUT_JSON",
+                    help="write the Visio file only if its layout is identical to this approved preview's lock")
+    ap.add_argument("--check-spec", metavar="ARCHITECTURE_SPEC_JSON",
+                    help="the questionnaire specification this diagram was generated from: the build is refused if the diagram does not "
+                         "show exactly its units, quantities, connections and placement (arch_spec.py verify-diagram)")
+    ap.add_argument("--draft", action="store_true",
+                    help="if blocking defects remain, render a DRAFT preview of the failing layout to look at (no Visio file is written)")
     a = ap.parse_args()
     out = a.out or os.path.join(os.path.expanduser("~"), "Downloads", "out", os.path.splitext(os.path.basename(a.spec))[0] + ".vsdx")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    locked = None
+    if a.locked_layout:
+        with open(a.locked_layout, encoding="utf-8") as fh:
+            locked = json.load(fh)["layout"]
+    if a.check_spec:                                                   # hierarchy level 2: the confirmed specification wins
+        import arch_spec
+        problems = arch_spec.verify_diagram(arch_spec.load(a.check_spec), load_json(a.spec))
+        if problems:
+            print("NOT BUILT: the diagram does not match the confirmed specification:\n  " + "\n  ".join(problems))
+            sys.exit(1)
     try:
-        r = build(load_json(a.spec), a.base, out, spec_dir=os.path.dirname(os.path.abspath(a.spec)))
+        r = build(load_json(a.spec), a.base, out, spec_dir=os.path.dirname(os.path.abspath(a.spec)), locked_layout=locked)
     except BuildError as e:
         print("NOT BUILT: %s" % e)
+        draft = getattr(e, "draft", None)
+        if a.draft and draft:
+            import dev_preview
+            png = os.path.splitext(out)[0] + "_DRAFT_preview.png"
+            dev_preview.render(draft["page"], png)
+            print("draft preview (not deliverable):", png)
         sys.exit(1)
     print("built %s: %d shapes, %d lines" % (r["out"], r["shapes"], r["lines"]))
     for w in r["warnings"]:
         print("  warning:", w)
     for w in r["notices"]:
         print("  notice:", w)
-    for d in r["qa"]:
-        print("  defect:", d)
-    print("qa: %s" % ("no defects found" if not r["qa"] else "%d defect(s): correct them and rebuild" % len(r["qa"])))
+    print("qa: no defects found (blocking checks passed)")
     if a.preview:
         import dev_preview
         png = os.path.splitext(out)[0] + "_preview.png"
         dev_preview.render(r["page"], png)
+        with open(lock_path(out), "w", encoding="utf-8") as fh:
+            json.dump({"layout": r["layout"], "note": "Layout lock of the approved preview. Export with --locked-layout this file: the "
+                                                     "Visio file is written only if its layout is identical."}, fh, indent=1)
         print("preview:", png)
+        print("layout lock:", lock_path(out))
+    if locked:
+        print("layout matches the approved preview")

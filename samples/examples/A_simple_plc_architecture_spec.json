@@ -267,52 +267,52 @@
   "instrument_to_control": {
    "value": "hardwired",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "io_protocol": {
    "value": "profinet",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "io_topology": {
    "value": "star",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "io_medium": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "io_star_hub": {
    "value": "EQ-006",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "plc_switch:EQ-004": {
    "value": "single_to_one",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "plc_switch_medium": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "link:EQ-007:1:target": {
    "value": "EQ-006",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "link:EQ-007:1:protocol": {
    "value": "PROFINET",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   },
   "link:EQ-007:1:medium": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:25"
+   "at": "2026-11-25T16:27:58"
   }
  },
  "layout": {},
@@ -336,77 +336,77 @@
  },
  "history": [
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "init",
    "detail": "specification created"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "project",
    "detail": "Client / Contractor=ACME Contracting; End User=City Water Authority; Project=Water Treatment Plant Upgrade; Document Title=PLC & SCADA System Architecture; Prepared By=AMB; Drawing Revision=R0"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "layers",
    "detail": "L0 Field Instruments, L1 Control System"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "equipment",
    "detail": "L0: added EQ-001 Pressure Transmitters, EQ-002 Temperature Transmitters, EQ-003 Flow Transmitters"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "equipment",
    "detail": "L1: added EQ-004 PLC, EQ-005 Remote I/O Rack, EQ-006 Industrial Ethernet Switch, EQ-007 HMI Panel"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "instrument_to_control = hardwired"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "io_protocol = profinet"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "io_topology = star"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "io_medium = copper"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "io_star_hub = EQ-006"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "plc_switch:EQ-004 = single_to_one"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "plc_switch_medium = copper"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "link:EQ-007:1:target = EQ-006"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "link:EQ-007:1:protocol = PROFINET"
   },
   {
-   "at": "2026-11-25T11:43:25",
+   "at": "2026-11-25T16:27:58",
    "action": "answer",
    "detail": "link:EQ-007:1:medium = copper"
   }

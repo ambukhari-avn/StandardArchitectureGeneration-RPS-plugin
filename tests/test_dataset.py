@@ -60,9 +60,9 @@ class ImportedDataTests(unittest.TestCase):
         cls.c = Components()
 
     def test_counts(self):
-        self.assertEqual(len(self.c.all), 90)  # five new categories; video_wall overrides its old image
-        self.assertEqual(len(self.c.distinct()), 75)
-        self.assertEqual(sum(1 for x in self.c.distinct() if x["picture"]), 42)
+        self.assertEqual(len(self.c.all), 92)  # five new categories; video_wall overrides its old image; 1.7.2 adds control_valve, analyzer
+        self.assertEqual(len(self.c.distinct()), 77)
+        self.assertEqual(sum(1 for x in self.c.distinct() if x["picture"]), 77)   # 1.7.2: every instrument has an offline illustration
 
     def test_ids_unique_and_repeats_resolve(self):
         self.assertEqual(len({x["id"] for x in self.c.all}), len(self.c.all))

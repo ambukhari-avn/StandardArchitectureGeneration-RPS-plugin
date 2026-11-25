@@ -30,6 +30,27 @@ class Components:
             for c in fixed:
                 for alias in [c['id'], c['label']] + c['aliases']:
                     self.fixed_aliases[self.normalise(alias)] = c['id']
+        inst_path = os.path.join(self._dir, "instrument_pictures.json")
+        self.balloons = {}
+        if os.path.exists(inst_path):                     # v1.7.2 offline instrument illustrations (fallbacks; web first still applies)
+            with open(inst_path, encoding="utf-8") as fh:
+                inst = json.load(fh)
+            have = {c["id"]: c for c in self.all}
+            for e in inst["components"]:
+                if e["id"] in have:
+                    c = have[e["id"]]
+                    if not c.get("picture") and not c.get("fixed"):
+                        c.update(picture=e["picture"], illustration=True, sha256=e["sha256"])
+                else:
+                    self.all.append({"id": e["id"], "layer": "Sensor", "title": e["label"], "label": e["label"], "brand": None,
+                                     "part_number": "Illustration", "confidence": None, "image_file_name": None, "picture": e["picture"],
+                                     "duplicate_of": None, "source_row": None, "illustration": True, "sha256": e["sha256"]})
+            self.balloons = {b["tag"]: os.path.join(self._dir, b["picture"]) for b in inst.get("balloons", [])}
+            for c in self.all:                             # an exact repeat of an illustrated instrument shares its picture
+                if c.get("duplicate_of") and not c.get("picture"):
+                    base = next((x for x in self.all if x["id"] == c["duplicate_of"]), None)
+                    if base and base.get("illustration"):
+                        c.update(picture=base["picture"], illustration=True)
         self.by_id = {c["id"]: c for c in self.all}
         if len(self.by_id) != len(self.all):
             raise ValueError("duplicate component ids in %s" % path)
@@ -71,3 +92,20 @@ class Components:
 
     def layers(self):
         return sorted({c["layer"] for c in self.all})
+
+
+INSTRUMENT_TAGS = [  # caption words -> ISA-5.1 letters (first match wins); used only for the balloon fallback
+    (r"differential\s+pressure|\bdp\b", "DPT"), (r"pressure\s+switch", "PS"), (r"pressure", "PT"), (r"temperature\s+switch", "TS"),
+    (r"temperature|thermo|rtd", "TT"), (r"flow\s+switch", "FS"), (r"flow", "FT"), (r"level\s+switch", "LS"), (r"level", "LT"),
+    (r"motor\s+operated|\bmov\b", "MOV"), (r"control\s+valve", "FCV"), (r"valve", "XV"), (r"gas", "GD"), (r"flame", "FD"),
+    (r"vibration", "VT"), (r"analy[sz]er|ph\b|orp|chlorine|turbidity|conductivity", "AT"), (r"proximity|limit", "ZS"),
+    (r"power|energy", "JT"), (r"current", "IT"), (r"speed", "ST"), (r"push\s*button|hand", "HS")]
+
+
+def instrument_tag(label):
+    """ISA-5.1 letters for an instrument caption ("Pressure Transmitters" -> "PT"); "I" when nothing matches."""
+    t = (label or "").lower()
+    for pattern, tag in INSTRUMENT_TAGS:
+        if re.search(pattern, t):
+            return tag
+    return "I"

@@ -16,8 +16,8 @@ python scripts/arch_spec.py <command> architecture_spec.json [options]
 | 3 Equipment | One multiline free-text question per selected layer, lowest level first | `add-equipment --layer L0 --text "..."` (or `--file`), `edit-equipment EQ-003 --quantity 4 ...`, `remove-equipment EQ-003` |
 | 4 Connectivity | Only the open questions `questions` lists, in its order | `connect ...` for connections already described, `questions [--next] [--json]`, `answer KEY VALUE [--text ...]`, `unanswer KEY` |
 | 5 Review & edit | Review, edits, return to any step; editable text request | `review`, `validate`, `request --out request.md`, `parse-request request.md [--apply]`, `note "..."` |
-| 6 Generate | — | `to-diagram --out diagram.json`, then `build_diagram.py diagram.json --out Architecture.vsdx --preview` |
-| 7 Modify | Change requests after delivery | `revise --revision R1 --note ..`, the edit commands above, `changes`, `to-diagram` again |
+| 6 Generate | Placement and display (optional) | `place EQ --left-of EQ`, `edit-connection CN --display bus\|point-to-point\|cross\|chain\|ring\|consolidated`, `layout --buses off`; `to-diagram --out diagram.json`; `verify-diagram spec diagram.json`; `build_diagram.py diagram.json --out Architecture.vsdx --check-spec spec --preview`; after approval the same with `--locked-layout Architecture.layout.json` |
+| 7 Modify | Change requests after delivery | `revise --revision R1 --note ..`, the edit commands above, `changes`, `to-diagram --previous old_diagram.json` (keeps pictures, waypoints and weights of unaffected items) |
 
 `show` prints the whole specification, `history` the change log, `stage NAME` records where the conversation is.
 

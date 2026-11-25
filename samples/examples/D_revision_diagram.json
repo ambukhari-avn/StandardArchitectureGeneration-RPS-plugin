@@ -29,7 +29,7 @@
   {
    "id": "G-FIELD",
    "kind": "group",
-   "label": "Field Instruments",
+   "label": "",
    "scope": "avanceon",
    "layer": "field",
    "columns": 3
@@ -38,6 +38,7 @@
    "id": "EQ-001-1",
    "parent": "G-FIELD",
    "label": "Pressure Transmitters",
+   "category": "instrument",
    "sublabel": "(Qty 12)",
    "component": "pressure_transmitter",
    "image": "../pictures/pressure_transmitter.png",
@@ -47,6 +48,7 @@
    "id": "EQ-002-1",
    "parent": "G-FIELD",
    "label": "Temperature Transmitters",
+   "category": "instrument",
    "sublabel": "(Qty 8)",
    "component": "temperature_transmitter_rtd_in_thermowell"
   },
@@ -54,6 +56,7 @@
    "id": "EQ-003-1",
    "parent": "G-FIELD",
    "label": "Flow Transmitters",
+   "category": "instrument",
    "sublabel": "(Qty 6)",
    "component": "electromagnetic_flowmeter",
    "image": "../pictures/flow_transmitter.png",
@@ -72,6 +75,7 @@
    "id": "EQ-004-1",
    "parent": "G-control",
    "label": "Redundant PLC CPUs",
+   "category": "plc",
    "row": 1,
    "sublabel": "(Primary)",
    "component": "rack_plc"
@@ -80,6 +84,7 @@
    "id": "EQ-004-2",
    "parent": "G-control",
    "label": "Redundant PLC CPUs",
+   "category": "plc",
    "row": 1,
    "sublabel": "(Secondary)",
    "component": "rack_plc"
@@ -88,14 +93,16 @@
    "id": "EQ-005-1",
    "parent": "G-control",
    "label": "Remote I/O Racks",
+   "category": "io",
    "row": 2,
-   "sublabel": "Qty: 4",
+   "sublabel": "Qty: 4 · Dual redundant network",
    "component": "remote_i_o_drop"
   },
   {
    "id": "EQ-006-1",
    "parent": "G-control",
    "label": "Industrial Ethernet Switch 1",
+   "category": "switch",
    "row": 0,
    "component": "ethernet_switch"
   },
@@ -103,6 +110,7 @@
    "id": "EQ-006-2",
    "parent": "G-control",
    "label": "Industrial Ethernet Switch 2",
+   "category": "switch",
    "row": 0,
    "component": "ethernet_switch"
   },
@@ -119,6 +127,8 @@
    "id": "EQ-007-1",
    "parent": "G-scada",
    "label": "SCADA Server",
+   "category": "server",
+   "row": 0,
    "sublabel": "(Primary)",
    "component": "rack_server"
   },
@@ -126,6 +136,8 @@
    "id": "EQ-007-2",
    "parent": "G-scada",
    "label": "SCADA Server",
+   "category": "server",
+   "row": 0,
    "sublabel": "(Standby)",
    "component": "rack_server"
   },
@@ -133,12 +145,16 @@
    "id": "EQ-008-1",
    "parent": "G-scada",
    "label": "Operator Workstation 1",
+   "category": "workstation",
+   "row": 0,
    "component": "client_operator_workstation"
   },
   {
    "id": "EQ-008-2",
    "parent": "G-scada",
    "label": "Operator Workstation 2",
+   "category": "workstation",
+   "row": 0,
    "component": "client_operator_workstation"
   }
  ],
@@ -163,7 +179,6 @@
   },
   {
    "cable": "ethernet",
-   "label": "Dual redundant network — 4 racks",
    "from": "EQ-006-1",
    "to": "EQ-005-1"
   },
@@ -202,23 +217,147 @@
   },
   {
    "cable": "ethernet",
-   "from": "EQ-006-1",
-   "to": "EQ-007-1"
-  },
-  {
-   "cable": "ethernet",
    "from": "EQ-006-2",
    "to": "EQ-007-2"
   },
   {
+   "from": "EQ-006-1",
+   "to": "BUS-EQ-006-1",
+   "cable": "ethernet"
+  }
+ ],
+ "buses": [
+  {
+   "id": "BUS-EQ-006-1",
+   "members": [
+    "EQ-007-1",
+    "EQ-008-1",
+    "EQ-008-2"
+   ],
    "cable": "ethernet",
-   "from": "EQ-008-1",
-   "to": "EQ-006-1"
+   "label": "Network"
+  }
+ ],
+ "logical_links": [
+  {
+   "id": "CN-001",
+   "units": [
+    [
+     "EQ-001-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "hardwired",
+   "pattern": "group",
+   "drawn": true
   },
   {
+   "id": "CN-002",
+   "units": [
+    [
+     "EQ-002-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "hardwired",
+   "pattern": "group",
+   "drawn": true
+  },
+  {
+   "id": "CN-003",
+   "units": [
+    [
+     "EQ-003-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "hardwired",
+   "pattern": "group",
+   "drawn": true
+  },
+  {
+   "id": "CN-004",
+   "units": [
+    [
+     "EQ-006-1",
+     "EQ-005-1"
+    ],
+    [
+     "EQ-006-2",
+     "EQ-005-1"
+    ]
+   ],
    "cable": "ethernet",
-   "from": "EQ-008-2",
-   "to": "EQ-006-1"
+   "pattern": "all-to-all",
+   "drawn": true
+  },
+  {
+   "id": "CN-005",
+   "units": [
+    [
+     "EQ-004-1",
+     "EQ-004-2"
+    ]
+   ],
+   "cable": "fibre",
+   "pattern": "pair",
+   "drawn": true
+  },
+  {
+   "id": "CN-006",
+   "units": [
+    [
+     "EQ-004-1",
+     "EQ-006-1"
+    ],
+    [
+     "EQ-004-1",
+     "EQ-006-2"
+    ],
+    [
+     "EQ-004-2",
+     "EQ-006-1"
+    ],
+    [
+     "EQ-004-2",
+     "EQ-006-2"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-007",
+   "units": [
+    [
+     "EQ-006-1",
+     "EQ-007-1"
+    ],
+    [
+     "EQ-006-2",
+     "EQ-007-2"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-008",
+   "units": [
+    [
+     "EQ-008-1",
+     "EQ-006-1"
+    ],
+    [
+     "EQ-008-2",
+     "EQ-006-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "each-to-one",
+   "drawn": true
   }
  ]
 }

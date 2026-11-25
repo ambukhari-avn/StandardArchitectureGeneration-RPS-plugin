@@ -1,15 +1,17 @@
 # Architecture diagram generator (ChatGPT and Claude plugin)
 
-**Current version: 1.7.1** (the same release for Claude and ChatGPT). Install both from the same `main` commit:
+**Current version: 1.7.2** (the same release for Claude and ChatGPT). Install both from the same `main` commit:
 
 | Where | What to install | How to confirm the version |
 |---|---|---|
-| Claude | `/plugin marketplace update rps-architecture`, then update `architecture-diagram`, then start a new session | `/plugin` shows architecture-diagram 1.7.1 |
-| ChatGPT (custom GPT) | Replace **both** the instructions (`chatgpt-plugin/instructions.md`) and the knowledge file (`arch_plugin_1.7.1.zip`) | The instructions start with "version 1.7.1"; the zip contains `arch_plugin/VERSION` = 1.7.1 |
+| Claude | `/plugin marketplace update rps-architecture`, then update `architecture-diagram`, then start a new session | `/plugin` shows architecture-diagram 1.7.2 |
+| ChatGPT (custom GPT) | Replace **both** the instructions (`chatgpt-plugin/instructions.md`) and the knowledge file (`arch_plugin_1.7.2.zip`) | The instructions start with "version 1.7.2"; the zip contains `arch_plugin/VERSION` = 1.7.2 |
 
-Never mix an old zip with new instructions (or the reverse): the GPT stops and says so. Previous releases: branches `release/v1.7.0` and `release/v1.6.0`.
+Never mix an old zip with new instructions (or the reverse): the GPT stops and says so. Previous releases: branches `release/v1.7.1`, `release/v1.7.0` and `release/v1.6.0`.
 
 ## Version history
+
+Version 1.7.2 moves correctness from the instructions into the engine (plan and conflicts resolved: [docs/v1.7.2-plan.md](docs/v1.7.2-plan.md)). One order of authority (locked template > confirmed specification > engineering rules > engine layout > presentation); `verify-diagram` / `--check-spec` refuse a drawing that changes confirmed quantities, units, connections or placement. The preview is rendered from the built page and locks the layout (`--preview` writes `<out>.layout.json`; `--locked-layout` exports only an identical layout). Functional rows for every layer, relative placement (`place --left-of/--right-of`) and layer heights from requirements. Logical connections are kept separately from their drawing: common network buses, point-to-point, cross-connections, chains, rings and consolidated hardwired (`edit-connection --display`, `layout --buses off`). Routing corridors per layer, attachment on the equipment picture, minimum clearances, locked `waypoints`. Minimum displayed sizes per equipment category with PLC and remote I/O first (`data/equipment_sizes.json`). An offline instrument library (35 drawn illustrations) with ISA-5.1 tag balloons as the last fallback, never a generic picture for an instrument. Every quality check is blocking with automatic correction (up to six passes); nothing is written while a defect remains. Revisions keep unaffected pictures, waypoints and weights (`to-diagram --previous`). Footer, logo, scope colours, cable legend, fixed artwork and editable A3 Visio are unchanged.
 
 Version 1.7.1 shows one version everywhere so Claude and ChatGPT installs cannot mix releases: the marketplace entry, the instructions and Claude skill header, a `VERSION` file inside the ChatGPT zip and the zip name (`arch_plugin_1.7.1.zip`). The GPT refuses to draw when its instructions and zip differ; `make_package.py` and `tests/test_version.py` stop on any mismatch. No drawing changes from 1.7.0.
 
@@ -32,7 +34,7 @@ Version 1.1.0 uses the latest [boxed reference layout](docs/reference-layout.md)
 ChatGPT designs the diagram and writes a small JSON file; fixed code draws it. The **footer**, **cable colours**, and **approved image library** provide consistent defaults across diagrams. Fixed pictures change only when the prompt explicitly requests it.
 
 ## Install
-- **ChatGPT:** create a custom GPT with `chatgpt-plugin/instructions.md` as its instructions and `arch_plugin_1.7.1.zip` plus the client's Word
+- **ChatGPT:** create a custom GPT with `chatgpt-plugin/instructions.md` as its instructions and `arch_plugin_1.7.2.zip` plus the client's Word
   document as knowledge, with Code Interpreter on. Steps in [docs/setup.md](docs/setup.md).
 - **Claude (Claude Code / desktop app), needs Python 3:**
   ```

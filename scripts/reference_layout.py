@@ -22,6 +22,10 @@ CABLE_GAP_X = .45  # side-by-side container boxes: room for a vertical cable wit
 BAND = .36       # clear band above and below a row inside a container whose devices are linked past a neighbour
 EDGE = .05       # clearance between the outer rows and the container border
 DEVICE_W = 1.35  # relative width weight of one device: every device in a row gets an equal share
+PIC_FLOOR = .25     # every picture area keeps at least this height (very wide equipment cannot collapse to its caption)
+TIGHT_RATIO = .82   # below this share of comfortable size, margins shrink to their minimum
+MIN_CHANNEL = .45  # a cable channel may shrink to this share of its comfortable width when equipment needs the room
+MAX_CELL = 2.4   # widest cell a device gets in a row of equipment (keeps related equipment together)
 FILL = .90       # target occupancy of a device's image area in its limiting dimension (80-90 %)
 
 
@@ -37,7 +41,44 @@ def natural_height(s):
         ar = (r - l) * iw / ((b - t) * ih)
     except Exception:
         return s["h"]
-    return LABEL_ZONE + (SUB_ZONE if s.get("sub") else 0) + min(1.3, max(.55, 1.2 / math.sqrt(ar)))
+    import qa                                                      # item 7: PLCs and remote I/O get visual priority in their row
+    spec_ = qa.sizes().get(qa.category_of(s), qa.sizes()["default"])
+    caption = LABEL_ZONE + (SUB_ZONE if s.get("sub") else 0)
+    # The minimum displayed size is a requirement, not a weight: the picture area must be tall enough for the picture's longest
+    # side to reach it (a tall PLC needs the full minimum in height, a wide server only minimum / aspect ratio).
+    required = spec_["min"] / FILL * (1.0 if ar <= 1 else 1.0 / ar) * 1.08
+    return caption + max(min(1.3, max(.55, 1.2 / math.sqrt(ar))) * spec_.get("weight", 1.0), required)
+
+
+def required_height(s):
+    """Height a device must get: caption plus the picture height that meets its category's minimum displayed size."""
+    pic = s.get("pic")
+    caption = LABEL_ZONE + (SUB_ZONE if s.get("sub") else 0)
+    if not pic:
+        return min(s["h"], caption + .35)
+    try:
+        l, t, r, b = visible_box(pic)
+        iw, ih = png_size(pic)
+        ar = (r - l) * iw / ((b - t) * ih)
+    except Exception:
+        return caption + .35
+    import qa
+    spec_ = qa.sizes().get(qa.category_of(s), qa.sizes()["default"])
+    return caption + max(PIC_FLOOR, spec_["min"] / FILL * (1.0 if ar <= 1 else 1.0 / ar) * 1.25)
+
+
+def two_tier(total, req, nat):
+    """Two-tier allocation: every part first gets its required size, the rest of `total` goes by natural weight.
+    If even the requirements do not fit, the parts shrink in proportion to their requirements (a defect is then reported)."""
+    need = sum(req)
+    if need <= 0:
+        return [total * n / max(1e-9, sum(nat)) for n in nat]
+    if need > total:
+        return [total * r / need for r in req]
+    extra = [max(0.0, n - r) for n, r in zip(nat, req)]
+    pool = sum(extra)
+    left = total - need
+    return [r + (left * e / pool if pool > 0 else left / len(req)) for r, e in zip(req, extra)]
 
 
 _WIRED = {"pairs": [], "parent": {}, "cache": {}}
@@ -82,18 +123,77 @@ def edge_for(rs):
     return EDGE
 
 
+LABEL_ROOM = .34   # reserved under the I/O that receives a labelled representative hardwired connection
+
+
+def order_row_constraints(rows_, group):
+    """Item 3: relative placement constraints. A shape may say {"place": {"left_of": id}} or {"right_of": id} for a neighbour in the
+    same container row; rows are reordered to satisfy them (stable otherwise). Conflicting constraints stop the build."""
+    out = []
+    for row in rows_:
+        ids = [s["id"] for s in row]
+        cons = []
+        for s in row:
+            p = s.get("place") or {}
+            if p.get("left_of") in ids:
+                cons.append((s["id"], p["left_of"]))
+            if p.get("right_of") in ids:
+                cons.append((p["right_of"], s["id"]))
+        if not cons:
+            out.append(row)
+            continue
+        order = list(ids)
+        for _ in range(len(order) * len(order)):
+            moved = False
+            for a, b in cons:
+                if order.index(a) > order.index(b):
+                    order.remove(a)
+                    order.insert(order.index(b), a)
+                    moved = True
+            if not moved:
+                break
+        else:
+            raise PlacementError("placement constraints in %r conflict: %s" % (group["id"], cons))
+        if any(order.index(a) > order.index(b) for a, b in cons):
+            raise PlacementError("placement constraints in %r conflict: %s" % (group["id"], cons))
+        by = {s["id"]: s for s in row}
+        out.append([by[i] for i in order])
+    return out
+
+
+class PlacementError(Exception):
+    pass
+
+
+def bus_room(row):
+    """Item 4/6: reserved corridors under a row: one trunk per network bus its devices hang on, and room for the label of a
+    representative hardwired connection arriving at I/O in this row (so the label never has to sit on a layer border)."""
+    n = max([len(_WIRED.get("buses", {}).get(s["id"], [])) for s in row] or [0])
+    room = 0.0 if not n else .16 + .14 * (n - 1) + .16
+    targets = _WIRED.get("hw_targets", set())
+    if targets and any(_subtree(s) & targets for s in row):
+        room += LABEL_ROOM
+    return room
+
+
 def vgap(upper, lower):
-    """Band between two rows: wide where container borders face each other and a cable runs between them."""
-    return CABLE_GAP if any(map(isgroup, upper + lower)) and _linked(upper, lower) else CHANNEL if not any(map(isgroup, upper + lower)) else CABLE_GAP * .5
+    """Band between two rows: wide where container borders face each other and a cable runs between them; rows joined by cables get
+    a visible channel (a short link between neighbouring rows must not read as a stub); a bus corridor is added below bus members."""
+    base = CABLE_GAP if any(map(isgroup, upper + lower)) and _linked(upper, lower) else \
+        (BAND if _linked(upper, lower) else CHANNEL) if not any(map(isgroup, upper + lower)) else CABLE_GAP * .5
+    return base + bus_room(upper)
 
 
 def hgap(left, right):
     if not (isgroup(left) or isgroup(right)):
+        label = _WIRED.get("labels", {}).get((left["id"], right["id"])) or _WIRED.get("labels", {}).get((right["id"], left["id"]))
+        if label:                                                    # a labelled direct link (e.g. redundancy sync) between neighbours
+            return max(GAP, max(len(x) for x in label.split("\n")) * .062 + .95)   # label plus room for cables crossing the link
         return GAP
     return CABLE_GAP_X if _linked([left], [right]) else CABLE_GAP_X * .5
 
 
-def apply_layers(spec, shapes, warnings, B):
+def apply_layers(spec, shapes, warnings, B, boost=None):
     wanted = spec.get("layers")
     if wanted is None:
         if any(s.get("layer") or s.get("parent") for s in shapes):
@@ -105,7 +205,13 @@ def apply_layers(spec, shapes, warnings, B):
         raise B.BuildError('"layers" must be a list of distinct layer ids (standard or custom_layers) from: %s' % ", ".join(ids))
     by_id = {s["id"]: s for s in shapes}
     _WIRED.update(pairs=[(str(c.get("from")), str(c.get("to"))) for c in spec.get("lines", []) if isinstance(c, dict)],
-                  parent={s["id"]: s.get("parent") for s in shapes}, cache={})
+                  parent={s["id"]: s.get("parent") for s in shapes}, cache={},
+                  labels={(str(c.get("from")), str(c.get("to"))): str(c["label"]) for c in spec.get("lines", [])
+                          if isinstance(c, dict) and c.get("direct") and c.get("label")}, buses={})
+    for b in spec.get("_buses", []):
+        for m in b["members"]:
+            _WIRED["buses"].setdefault(m, []).append(b["id"])
+
     # Validate the hierarchy before modifying coordinates. Layer inheritance is
     # explicit and cycles/foreign parents never silently produce a broken page.
     def inherit(s, trail):
@@ -195,6 +301,9 @@ def apply_layers(spec, shapes, warnings, B):
             warnings.append("group %r is an unlabeled box that only wraps group %r: remove it unless it marks a scope, panel, site or "
                             "security zone (use as few boxes as the drawing allows)" % (g["id"], kids[0]["id"]))
     _WIRED.update(parent={s["id"]: s.get("parent") for s in shapes}, cache={})   # generated groups now exist
+    field = {s["id"] for s in shapes if s.get("layer") == "field"}                # layers are inherited by now
+    _WIRED["hw_targets"] = {str(c.get(end)) for c in spec.get("lines", []) if isinstance(c, dict) and c.get("cable") == "hardwired"
+                            for end in ("from", "to") if str(c.get(end)) not in field and str(c.get("to" if end == "from" else "from")) in field}
     def children(group):
         return [s for s in shapes if s.get("parent") == group["id"]]
     def rows(group):
@@ -212,8 +321,17 @@ def apply_layers(spec, shapes, warnings, B):
                 row = s.get("row", None)
                 if row is not None and (not isinstance(row, int) or isinstance(row, bool) or row < 0 or row > 24):
                     raise B.BuildError("shape %r: row must be an integer from 0 to 24" % s["id"])
-            return [[s for s in members if (s.get("row") or 0) == i] for i in sorted({s.get("row") or 0 for s in members})]
-        return [members[i:i + cols] for i in range(0, len(members), cols)]
+            out = [[s for s in members if (s.get("row") or 0) == i] for i in sorted({s.get("row") or 0 for s in members})]
+            if (boost or {}).get("_compact") and len(out) > 1:
+                # Over the page budget: functional rows are a placement preference (7.6), so they may share a row.
+                import qa
+                if all(x["kind"] == "box" for r_ in out for x in r_) and group.get("layer") != "control" and group.get("frame") is False:
+                    out = [[x for r_ in out for x in r_]]                 # e.g. DMZ: server and firewall side by side
+                elif all(qa.category_of(x) == "fo_panel" for x in out[0] if x["kind"] == "box") and all(x["kind"] == "box" for x in out[0]):
+                    half = (len(out[0]) + 1) // 2                         # control: patch panels on the outer ends of the switch row,
+                    out = [out[0][:half] + out[1] + out[0][half:]] + out[2:]  # so the switches stay above their PLCs
+            return order_row_constraints(out, group)
+        return order_row_constraints([members[i:i + cols] for i in range(0, len(members), cols)], group)
     def measure(s):
         if s["kind"] != "group":
             return DEVICE_W, natural_height(s)  # natural size is only a weight: it is never a maximum
@@ -222,13 +340,25 @@ def apply_layers(spec, shapes, warnings, B):
             return s["w"], .75  # a system summary box needs little height
         dims = [[measure(c) for c in row] for row in rs]
         width = max(sum(w for w, h in row) + sum(hgap(a, b) for a, b in zip(r, r[1:])) for row, r in zip(dims, rs))
-        height = sum(max(h for w, h in row) for row in dims) + sum(vgap(a, b) for a, b in zip(rs, rs[1:]))
+        height = sum(max(h for w, h in row) for row in dims) + sum(vgap(a, b) for a, b in zip(rs, rs[1:])) + bus_room(rs[-1])
         return (width + 2 * PAD, height + 2 * (PAD + edge_for(rs)) + (TITLE if s["label"] else 0))
+    def measure_req(s):
+        if s["kind"] != "group":
+            return DEVICE_W, required_height(s)
+        rs = rows(s)
+        if not rs:
+            return s["w"], .75
+        dims = [[measure_req(c) for c in row] for row in rs]
+        width = max(sum(w for w, h in row) + sum(hgap(a, b) for a, b in zip(r, r[1:])) for row, r in zip(dims, rs))
+        # minimum workable cable channels (place() caps channels at 45 % of the room; comfort space is shared out later)
+        height = sum(max(h for w, h in row) for row in dims) + sum(MIN_CHANNEL * vgap(a, b) for a, b in zip(rs, rs[1:])) + bus_room(rs[-1])
+        return (width + 2 * PAD, height + 2 * (PAD * .6 + edge_for(rs) * .5) + (TITLE if s["label"] else 0))
+    measure.req = measure_req
     weights = spec.get("layer_weights", {})
     if not isinstance(weights, dict) or any(k not in wanted or B._num(v) is None or float(v) <= 0 for k, v in weights.items()):
         raise B.BuildError("layer_weights must map included layer ids to positive numbers")
     order = [t for t in table if t["id"] in wanted]
-    natural = {}
+    natural, required = {}, {}
     for t in order:
         roots = [s for s in shapes if s.get("layer") == t["id"] and not s.get("parent")]
         # A layer's share follows what it must hold (rows of pictures, captions, titles), so large
@@ -240,7 +370,8 @@ def apply_layers(spec, shapes, warnings, B):
         ends += [(a, b) for c in spec.get("lines", []) if isinstance(c, dict) and c.get("chain") for a, b in zip(c["chain"], c["chain"][1:])]
         busy = sum(1 for a, b in ends if t["id"] in (layer_of.get(a), layer_of.get(b)))
         need += min(.5, .03 * busy)
-        natural[t["id"]] = float(weights.get(t["id"], max(need, .9)))
+        natural[t["id"]] = float(weights.get(t["id"], max(need, .9))) * float((boost or {}).get(t["id"], 1.0))
+        required[t["id"]] = max([measure_req(s)[1] for s in roots] or [.8]) + .10 + min(.2, .015 * busy)
     available = B.AREA_H - LAYER_GAP * (len(order) - 1)
     total = sum(natural.values())
     panels, y = [], 0.0
@@ -249,8 +380,20 @@ def apply_layers(spec, shapes, warnings, B):
         raise B.BuildError("layer_headers must be an object")
     any_desc = any(isinstance(options.get(t["id"]), dict) and options[t["id"]].get("description") for t in order)
     head_w = HEAD_W_DESC if any_desc else HEAD_W
+    # Spare room beyond the requirements is shared by natural need, capped at 1.6x the requirement so one busy layer cannot
+    # take it all; the correction boost then steers spare room (never requirements) towards layers that still fall short.
+    explicit = weights and all(t["id"] in weights for t in order) and not boost
+    plain = {t["id"]: available * natural[t["id"]] / total for t in order}
+    if explicit and all(plain[t["id"]] >= required[t["id"]] for t in order):
+        heights = plain                                              # the user's proportions, exactly, when they meet every minimum
+    else:
+        heights = dict(zip([t["id"] for t in order], two_tier(available, [required[t["id"]] for t in order],
+                                                         [min(max(natural[t["id"]], required[t["id"]]), 1.6 * required[t["id"]] *
+                                                              float((boost or {}).get(t["id"], 1.0))) for t in order])))
+        if explicit:
+            warnings.append("layer_weights adjusted so every layer meets its equipment minimum sizes")
     for t in order:
-        h = available * natural[t["id"]] / total
+        h = heights[t["id"]]
         override = options.get(t["id"], {})
         if not isinstance(override, dict):
             raise B.BuildError("each layer_headers entry must be an object")
@@ -306,18 +449,26 @@ def place(s, x, y, w, h, rows, measure, warnings, B):
         return
     padding = min(PAD, h * .08)
     title = min(TITLE, h * .18) if s["label"] else 0
-    inner_w, inner_h = w - 2 * padding, h - 2 * padding - title
     dims = [[measure(c) for c in row] for row in rs]
-    edge = min(edge_for(rs), inner_h / 6.)
+    edge = min(edge_for(rs), (h - 2 * padding - title) / 6.)
+    if hasattr(measure, "req") and h < measure.req(s)[1] / TIGHT_RATIO:
+        padding, edge = min(padding, PAD * .6), min(edge, edge_for(rs) * .5)   # equipment minimums come before comfortable margins
+    inner_w, inner_h = w - 2 * padding, h - 2 * padding - title
     row_nat = [max(ch for cw, ch in row) for row in dims]
     channels = [vgap(a, b) for a, b in zip(rs, rs[1:])]
-    room = inner_h - 2 * edge
+    room = inner_h - 2 * edge - bus_room(rs[-1])                    # the bus corridor under the last row is kept clear
     if sum(channels) > .45 * room:                                  # never let the channels crowd the equipment out
         channels = [c * .45 * room / sum(channels) for c in channels]
+    row_need = sum(max(measure.req(c)[1] for c in row) for row in rs) if hasattr(measure, "req") else 0
+    if row_need and room - sum(channels) < row_need:                # equipment minimums come before comfortable channels
+        floor = [MIN_CHANNEL * c for c in channels]
+        spare = max(0.0, room - row_need - sum(floor))
+        channels = [f + min(c - f, spare * (c - f) / max(1e-9, sum(channels) - sum(floor))) for c, f in zip(channels, floor)]
     avail_h = room - sum(channels)
     if avail_h <= 0 or inner_w <= 0:
         raise B.BuildError("group %r cannot fit its contents on A3" % s["id"])
-    heights = [avail_h * n / sum(row_nat) for n in row_nat]
+    row_req = [max((measure.req(c)[1] if hasattr(measure, "req") else ch) for c, (cw, ch) in zip(row, dr)) for row, dr in zip(rs, dims)]
+    heights = two_tier(avail_h, row_req, [max(n, r) for n, r in zip(row_nat, row_req)])
     cy = y + padding + title + edge
     for r, (row, sizes, rh) in enumerate(zip(rs, dims, heights)):
         gaps = [hgap(a, b) for a, b in zip(row, row[1:])]
@@ -327,9 +478,13 @@ def place(s, x, y, w, h, rows, measure, warnings, B):
         total = sum(cw for cw, ch in sizes)
         if usable / total < .55 * DEVICE_W or rh < .5 * min(ch for cw, ch in sizes):
             warnings.append("group %r is crowded; increase its layer weight or reduce equipment" % s["id"])
-        cx = x + padding
-        for k, (c, (cw, ch)) in enumerate(zip(row, sizes)):
-            cell_w = usable * cw / total
+        cells = [usable * cw / total for cw, ch in sizes]
+        if all(c["kind"] != "group" for c in row):
+            # A row of equipment stays compact and centred instead of being stretched across the page, so related
+            # equipment (a redundant PLC pair, its switches) sits together and cables stay short.
+            cells = [min(cw, MAX_CELL) for cw in cells]
+        cx = x + padding + (usable - sum(cells)) / 2
+        for k, (c, cell_w) in enumerate(zip(row, cells)):
             place(c, cx, cy, cell_w, rh, rows, measure, warnings, B)
             cx += cell_w + (gaps[k] if k < len(gaps) else 0)
         cy += rh + (channels[r] if r < len(channels) else 0)

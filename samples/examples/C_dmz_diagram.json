@@ -43,6 +43,7 @@
    "id": "EQ-001-1",
    "parent": "G-control",
    "label": "PLC",
+   "category": "plc",
    "row": 1,
    "component": "rack_plc"
   },
@@ -50,6 +51,7 @@
    "id": "EQ-002-1",
    "parent": "G-control",
    "label": "Industrial Ethernet Switch",
+   "category": "switch",
    "row": 0,
    "component": "ethernet_switch"
   },
@@ -66,6 +68,8 @@
    "id": "EQ-003-1",
    "parent": "G-scada",
    "label": "SCADA Server",
+   "category": "server",
+   "row": 0,
    "sublabel": "(Primary)",
    "component": "rack_server"
   },
@@ -73,6 +77,8 @@
    "id": "EQ-003-2",
    "parent": "G-scada",
    "label": "SCADA Server",
+   "category": "server",
+   "row": 0,
    "sublabel": "(Standby)",
    "component": "rack_server"
   },
@@ -80,6 +86,8 @@
    "id": "EQ-004-1",
    "parent": "G-scada",
    "label": "SCADA Switch",
+   "category": "switch",
+   "row": 1,
    "component": "ethernet_switch"
   },
   {
@@ -95,6 +103,8 @@
    "id": "EQ-005-1",
    "parent": "G-dmz",
    "label": "Firewall",
+   "category": "firewall",
+   "row": 1,
    "sublabel": "Fortinet FortiGate 100F",
    "component": "firewall"
   },
@@ -102,6 +112,8 @@
    "id": "EQ-006-1",
    "parent": "G-dmz",
    "label": "Historian Replica Server",
+   "category": "historian",
+   "row": 0,
    "component": "historian_application_server"
   },
   {
@@ -117,12 +129,16 @@
    "id": "EQ-007-1",
    "parent": "G-enterprise",
    "label": "ERP Server",
+   "category": "server",
+   "row": 0,
    "component": "rack_server"
   },
   {
    "id": "EQ-008-1",
    "parent": "G-enterprise",
    "label": "Corporate Switch",
+   "category": "switch",
+   "row": 1,
    "component": "ethernet_switch"
   }
  ],
@@ -166,6 +182,96 @@
    "cable": "ethernet",
    "from": "EQ-007-1",
    "to": "EQ-008-1"
+  }
+ ],
+ "logical_links": [
+  {
+   "id": "CN-001",
+   "units": [
+    [
+     "EQ-001-1",
+     "EQ-002-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-002",
+   "units": [
+    [
+     "EQ-002-1",
+     "EQ-004-1"
+    ]
+   ],
+   "cable": "fibre",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-003",
+   "units": [
+    [
+     "EQ-003-1",
+     "EQ-004-1"
+    ],
+    [
+     "EQ-003-2",
+     "EQ-004-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-004",
+   "units": [
+    [
+     "EQ-005-1",
+     "EQ-004-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-005",
+   "units": [
+    [
+     "EQ-005-1",
+     "EQ-008-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "links",
+   "drawn": true
+  },
+  {
+   "id": "CN-006",
+   "units": [
+    [
+     "EQ-006-1",
+     "EQ-005-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "each-to-one",
+   "drawn": true
+  },
+  {
+   "id": "CN-007",
+   "units": [
+    [
+     "EQ-007-1",
+     "EQ-008-1"
+    ]
+   ],
+   "cable": "ethernet",
+   "pattern": "each-to-one",
+   "drawn": true
   }
  ]
 }

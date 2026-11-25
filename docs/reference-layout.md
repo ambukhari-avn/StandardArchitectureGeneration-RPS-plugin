@@ -40,3 +40,11 @@ Picture transparency, the 2400 px cap, compact dashes and black-frame prevention
 
 ## Control-layer order, representative I/O and checks (Phases 7-8)
 `scripts/arch_spec.py to-diagram` places control equipment top to bottom as FO patch panels, switches, PLCs (primary and secondary side by side), I/O; absent equipment leaves no empty row. A representative rack (equivalent racks in a star or on a backplane, or when the user chose the simplified display) is one picture captioned with the total quantity and has no box. Lines accept `"arrows": "none" | "end" | "both"`; hardwired signals default to an arrow at the I/O. After routing, cables sharing a track or an attachment point are moved onto their own parallel track, and `qa.py` checks every build (see `defect:` lines). The header/footer geometry and logo are locked in `data/template_lock.json`.
+
+## Engine layout (1.7.2)
+
+- **Functional rows in every layer**: control (I/O racks, PLCs, switches with FO panels at the ends), SCADA (servers, clients, network); relative `place` constraints (`left_of`, `right_of`) reorder a row.
+- **Heights by requirement**: each layer first receives what its minimum picture sizes, captions, cable channels (at least 0.45 in), buses and hardwired labels need; spare space is then shared by content. If the page cannot fit, the compact arrangement merges rows.
+- **Corridors and attachment**: a cable stays inside the layers of its two ends (its corridor), starts and ends on the equipment picture (not on the empty cell), and the facing sides of a direct pair (redundancy sync) are reserved for that link.
+- **Buses**: a switch serving three or more devices in one row is drawn as a common network bus (trunk, drops, one uplink); the per-device logical links stay in `logical_links`.
+- **Blocking checks with automatic correction**: picture size, clearance, corridors, dangling/floating ends, cables inside the drawing area, cable spacing, attachment points, text, headings, boxes, page and template. Up to six correction passes, otherwise NOT BUILT and nothing written.
