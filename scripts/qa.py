@@ -90,7 +90,7 @@ def check_cables(lines, paths, rect_of_id, label_of_id=None):
     return out
 
 
-def check_cable_spacing(lines, paths, gap=0.06, run=0.2):
+def check_cable_spacing(lines, paths, gap=0.075, run=0.2):
     """8.3 / 8.6: two different cables must not run along (almost) the same track: that reads as one cable or an accidental junction."""
     segs = []
     for n, pts in enumerate(paths):
@@ -107,7 +107,8 @@ def check_cable_spacing(lines, paths, gap=0.06, run=0.2):
             shared = min(a[4], b[4]) - max(a[3], b[3])
             ca, cb = lines[a[0]], lines[b[0]]
             bus = ca.get("cable") == cb.get("cable") == "hardwired"          # the approved hardwired bus into an I/O is shared on purpose
-            if shared > run and not bus and (a[0], b[0]) not in seen:
+            on_trunk = {ca["a"], ca["b"]} & {cb["a"], cb["b"]} and (ca["a"] == ca["b"] or cb["a"] == cb["b"])   # a bus's own uplink
+            if shared > run and not bus and not on_trunk and (a[0], b[0]) not in seen:
                 seen.add((a[0], b[0]))
                 out.append("cables %s and %s run along the same track for %.2f in (reads as one cable or a junction)" %
                            ("%s-%s" % (ca["a"], ca["b"]), "%s-%s" % (cb["a"], cb["b"]), shared))
@@ -193,6 +194,157 @@ def check_containers(shapes):
         if len(kids) == 1 and kids[0]["kind"] == "box" and g.get("layer") != "field":
             out.append("box %r only wraps %r: remove it (no panel, scope or system reason)" % (g["id"], kids[0]["id"]))
     return out
+
+
+_SIZES = None
+
+
+def sizes():
+    global _SIZES
+    if _SIZES is None:
+        import re
+        with open(os.path.join(ROOT, "data", "equipment_sizes.json"), encoding="utf-8") as fh:
+            raw = json.load(fh)["categories"]
+        _SIZES = {k: dict(v, rx=re.compile(v["words"], re.I) if v.get("words") else None) for k, v in raw.items()}
+    return _SIZES
+
+
+def category_of(s):
+    """Equipment category for sizing: declared, else recognised from the caption (first match in equipment_sizes.json order)."""
+    table = sizes()
+    if s.get("category") in table:
+        return s["category"]
+    if s.get("category") in ("eng_workstation", "laptop"):
+        return "workstation"
+    if s.get("category") in ("historian",):
+        return "server"
+    text = " ".join(str(s.get(k) or "") for k in ("label", "sub", "component"))
+    for name, v in table.items():
+        if v.get("rx") is not None and v["rx"].search(text):
+            return name
+    return "default"
+
+
+def displayed_long_side(d):
+    """Longest visible side of a device picture as laid out (inches)."""
+    import draw
+    sub_h = draw.SUB_ZONE if d.get("sub") else 0
+    area_h = d["h"] - draw.LABEL_ZONE - sub_h
+    if area_h <= 0 or not d.get("pic"):
+        return 0.0
+    try:
+        vw, vh = draw.visible_size(d["pic"], d["w"], area_h, 0.90)
+    except Exception:
+        return 0.0
+    return max(vw, vh)
+
+
+def check_sizes(shapes):
+    """Item 7: every equipment picture meets its category's minimum displayed size (PLC and remote I/O have the largest minimums)."""
+    out = []
+    table = sizes()
+    for d in shapes:
+        if d["kind"] != "box" or not d.get("reference") or not d.get("pic"):
+            continue
+        cat = category_of(d)
+        need = table.get(cat, table["default"])["min"]
+        got = displayed_long_side(d)
+        if 0 < got < need - 0.005:
+            out.append("%s picture %r is %.2f in, below the %.2f in minimum for %s equipment" % (cat, d["id"], got, need, cat))
+    return out
+
+
+def check_clearance(lines, paths, shapes, rect_of_id, clear=0.04):
+    """Item 6: a cable keeps a minimum clearance from equipment it does not connect to (no running along or through a picture)."""
+    out = []
+    devices = [d for d in shapes if d["kind"] == "box" and d.get("reference")]
+    for c, pts in zip(lines, paths):
+        ends = {c["a"], c["b"]}
+        for d in devices:
+            if d["id"] in ends or any(d["id"] == e for e in ends):
+                continue
+            x, y, w, h = rect_of_id(d["id"])
+            x0, y0, x1, y1 = x - clear, y - clear, x + w + clear, y + h + clear
+            for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+                lo_x, hi_x, lo_y, hi_y = min(ax, bx), max(ax, bx), min(ay, by), max(ay, by)
+                if hi_x > x0 and lo_x < x1 and hi_y > y0 and lo_y < y1:
+                    out.append("cable %s-%s passes within %.2f in of %r" % (c["a"], c["b"], clear, d["id"]))
+                    break
+            else:
+                continue
+            break
+    return out
+
+
+def check_corridors(lines, paths, corridors, shapes, rect_of_id, tol=0.06):
+    """Item 6: a cable stays in the band of layers it connects, and never runs inside a visible box that holds neither of its ends."""
+    out = []
+    by_id = {s["id"]: s for s in shapes}
+
+    def ancestors(i):
+        res, s = set(), by_id.get(i)
+        while s is not None and s.get("parent"):
+            res.add(s["parent"])
+            s = by_id.get(s["parent"])
+        return res
+    boxes = [g for g in shapes if g["kind"] == "group" and g.get("frame") is not False]
+    for c, pts, band in zip(lines, paths, corridors):
+        name = "cable %s-%s" % (c["a"], c["b"])
+        if band:
+            lo, hi = band[1] - tol, band[1] + band[3] + tol
+            if any(not (lo <= y <= hi) for x, y in pts):
+                out.append("%s leaves the layers it connects (routing corridor)" % name)
+                continue
+        own = ancestors(c["a"]) | ancestors(c["b"]) | {c["a"], c["b"]}
+        for g in boxes:
+            if g["id"] in own:
+                continue
+            x, y, w, h = rect_of_id(g["id"])
+            inside = [(px, py) for px, py in pts if x + tol < px < x + w - tol and y + tol < py < y + h - tol]
+            if len(inside) >= 2:
+                out.append("%s runs inside the box %r that holds neither of its ends" % (name, g["id"]))
+                break
+    return out
+
+
+def layout_signature(page):
+    """Hash of the complete drawn geometry (every shape's kind, key, box, points, text): identical for identical layouts."""
+    rows = []
+    for s in page.shapes:
+        rows.append([s.get("kind"), s.get("key"), _r(s["x"]), _r(s["y"]), _r(s["w"]), _r(s["h"]), str(s.get("text") or ""),
+                     [[_r(x), _r(y)] for x, y in (s.get("pts") or [])], s.get("line"), s.get("fill")])
+    return hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+
+
+def check_picture_ends(lines, paths, by_id, picture_rect, on, margin=.02):
+    """8.1: a cable ending on a device meets its visible picture (top/bottom within the picture's width, sides beside the picture),
+    never empty space around a wide caption, which reads as a dangling stub."""
+    out = []
+    for c, pts in zip(lines, paths):
+        if len(pts) < 2:
+            continue
+        for end, nxt in ((pts[0], pts[1]), (pts[-1], pts[-2])):
+            for e in (c["a"], c["b"]):
+                d = by_id.get(e)
+                if d is None or d["kind"] != "box" or not d.get("pic") or not on(end, d):
+                    continue
+                px, py, pw, ph = picture_rect(d)
+                vertical = abs(end[0] - nxt[0]) < 1e-6
+                if vertical and not (px - margin <= end[0] <= px + pw + margin):
+                    out.append("cable %s-%s ends beside the picture of %r (dangling end)" % (c["a"], c["b"], e))
+                elif not vertical and not (py - margin <= end[1] <= py + ph + margin):
+                    out.append("cable %s-%s ends above or below the picture of %r (dangling end)" % (c["a"], c["b"], e))
+                elif not vertical and min(abs(end[0] - px), abs(end[0] - px - pw)) > .06:
+                    out.append("cable %s-%s stops short of the picture of %r (floating end)" % (c["a"], c["b"], e))
+    return out
+
+
+def check_inside(paths, bottom, top, left, right):
+    """8.1: every cable stays inside the drawing area (above the footer)."""
+    for pts in paths:
+        if any(not (left - .02 <= x <= right + .02 and bottom - .02 <= y <= top + .02) for x, y in pts):
+            return ["a cable leaves the drawing area (runs into the footer or off the page)"]
+    return []
 
 
 def check_page(page):

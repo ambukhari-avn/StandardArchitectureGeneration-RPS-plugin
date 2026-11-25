@@ -164,7 +164,7 @@ def case_d():
 CASES = {"A_simple_plc": case_a, "B_redundant_plc": case_b, "C_dmz": case_c, "D_revision": case_d}
 
 
-def write(name, run, folder, build=True, preview=True):
+def write(name, run, folder, build=True, preview=True, previous=None):
     import build_diagram as B
     os.makedirs(folder, exist_ok=True)
     spec = run.spec
@@ -178,6 +178,11 @@ def write(name, run, folder, build=True, preview=True):
             img.update(image=os.path.relpath(os.path.join(ROOT, "samples", "pictures", img["fixture"]), folder),
                        image_source="Bundled example picture (stands in for a web-sourced manufacturer image)")
     d, warnings = A.to_diagram(spec)
+    if previous is not None:                                           # a revision keeps the presentation choices of the last drawing
+        A.merge_previous(d, previous)
+    problems = A.verify_diagram(spec, d)                               # the drawing must show exactly the confirmed specification
+    if problems:
+        raise A.SpecError("diagram does not match the specification: " + "; ".join(problems))
     spec["baseline"] = A.snapshot(spec)
     A.save(spec, path("_architecture_spec.json"))
     with open(path("_diagram.json"), "w", encoding="utf-8") as fh:
@@ -188,11 +193,14 @@ def write(name, run, folder, build=True, preview=True):
     if preview:
         import dev_preview
         dev_preview.render(r["page"], path("_preview.png"))
+    r["diagram"] = d
     return r
 
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "samples", "examples")
+    built = {}
     for name, fn in CASES.items():
-        r = write(name, fn(), out)
+        r = write(name, fn(), out, previous=built["B_redundant_plc"]["diagram"] if name == "D_revision" else None)
+        built[name] = r
         print("%s: built, %d shapes, %d lines, qa: %s" % (name, r["shapes"], r["lines"], "; ".join(r["qa"]) or "no defects"))

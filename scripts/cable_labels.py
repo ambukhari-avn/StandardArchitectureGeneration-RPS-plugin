@@ -44,7 +44,8 @@ def draw(page, lines, paths, shapes, warnings, B):
                     and not any(overlaps(r, other) for other in blocked)
                     and not any(B.crosses(path, r, inset=0) for path in paths)
                     and not (borders and on_border(r)))
-        rect = next((r for r in candidates if fits(r, True)), None) or next((r for r in candidates if fits(r, False)), None)
+        # v1.7.2: a label straddling a layer or container border is a defect, not a fallback; the engine gives the layer room instead
+        rect = next((r for r in candidates if fits(r, True)), None)
         if rect is None:
             raise B.BuildError('Cable label cannot fit clear of equipment and intersections: %s; increase spacing or adjust the route' % label)
         size = fit_size(label, w, h, (7, 6.5, 6))

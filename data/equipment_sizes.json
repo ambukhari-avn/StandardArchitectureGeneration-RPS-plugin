@@ -1,0 +1,17 @@
+{
+ "_note": "Minimum displayed picture sizes (v1.7.2): the longest visible side of the equipment picture, in inches on the A3 page, after layout. A smaller picture is a blocking quality defect; the engine first gives the layer more room. 'weight' raises the share of row height a category receives (visual priority): PLCs and remote I/O racks come first. Categories come from the shape's \"category\" or are recognised from its caption.",
+ "categories": {
+  "plc":             {"min": 0.85, "weight": 1.35, "words": "\\bplc|controller|\\bcpu\\b|s7-|controllogix|compactlogix|m580|m340|\\bpac\\b"},
+  "io":              {"min": 0.80, "weight": 1.30, "words": "\\bi/o\\b|\\brio\\b|remote io|io rack|i/o rack|et ?200|\\bracks?\\b"},
+  "rtu":             {"min": 0.70, "weight": 1.15, "words": "\\brtu\\b|remote terminal"},
+  "dcs":             {"min": 0.70, "weight": 1.15, "words": "\\bdcs\\b|distributed control"},
+  "server":          {"min": 0.65, "weight": 1.0,  "words": "server|historian|\\bnas\\b"},
+  "workstation":     {"min": 0.60, "weight": 1.0,  "words": "workstation|\\bows\\b|\\bews\\b|operator station|laptop|\\bpc\\b|client"},
+  "hmi":             {"min": 0.55, "weight": 1.0,  "words": "\\bhmi\\b|operator panel|touch panel"},
+  "switch":          {"min": 0.95, "weight": 1.0,  "words": "(?<!level )(?<!pressure )(?<!flow )(?<!temperature )(?<!limit )(?<!float )switch"},
+  "firewall":        {"min": 0.60, "weight": 1.0,  "words": "firewall"},
+  "fo_panel":        {"min": 0.95, "weight": 1.0,  "words": "patch panel|\\bodf\\b"},
+  "instrument":      {"min": 0.40, "weight": 1.0,  "words": "transmitter|sensor|meter|gauge|valve|detector|analy[sz]er|probe|thermo|(?:level|pressure|flow|temperature|limit|float) switch"},
+  "default":         {"min": 0.40, "weight": 1.0}
+ }
+}

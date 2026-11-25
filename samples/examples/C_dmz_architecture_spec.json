@@ -345,67 +345,67 @@
   "plc_switch:EQ-001": {
    "value": "single_to_one",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "plc_switch_medium": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "control_scada": {
    "value": "fibre",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "scada_lan_medium": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "fibre_topology": {
    "value": "p2p",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "firewall_zones:EQ-005": {
    "value": "L2,L4",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "firewall_medium:EQ-005": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "link:EQ-006:1:target": {
    "value": "EQ-005",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "link:EQ-006:1:protocol": {
    "value": "OPC UA",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "link:EQ-006:1:medium": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "link:EQ-007:1:target": {
    "value": "EQ-008",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "link:EQ-007:1:protocol": {
    "value": "Ethernet (TCP/IP)",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   },
   "link:EQ-007:1:medium": {
    "value": "copper",
    "text": null,
-   "at": "2026-11-25T11:43:26"
+   "at": "2026-11-25T16:27:59"
   }
  },
  "layout": {},
@@ -418,102 +418,102 @@
  },
  "history": [
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "init",
    "detail": "specification created"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "project",
    "detail": "Client / Contractor=ACME Contracting; End User=City Water Authority; Project=Water Treatment Plant Upgrade; Document Title=OT Network Architecture with DMZ; Prepared By=AMB; Drawing Revision=R0"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "layers",
    "detail": "L1 Control, L2 SCADA / Supervisory, L3.5 DMZ — Demilitarized Zone, L4 Enterprise / Business Network"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "equipment",
    "detail": "L1: added EQ-001 PLC, EQ-002 Industrial Ethernet Switch"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "equipment",
    "detail": "L2: added EQ-003 SCADA Servers, EQ-004 SCADA Switch"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "equipment",
    "detail": "L3.5: added EQ-005 Firewall, EQ-006 Historian Replica Server"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "equipment",
    "detail": "L4: added EQ-007 ERP Server, EQ-008 Corporate Switch"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "plc_switch:EQ-001 = single_to_one"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "plc_switch_medium = copper"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "control_scada = fibre"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "scada_lan_medium = copper"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "fibre_topology = p2p"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "firewall_zones:EQ-005 = L2,L4"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "firewall_medium:EQ-005 = copper"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "link:EQ-006:1:target = EQ-005"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "link:EQ-006:1:protocol = OPC UA"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "link:EQ-006:1:medium = copper"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "link:EQ-007:1:target = EQ-008"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "link:EQ-007:1:protocol = Ethernet (TCP/IP)"
   },
   {
-   "at": "2026-11-25T11:43:26",
+   "at": "2026-11-25T16:27:59",
    "action": "answer",
    "detail": "link:EQ-007:1:medium = copper"
   }

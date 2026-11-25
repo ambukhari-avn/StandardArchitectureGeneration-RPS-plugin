@@ -1169,7 +1169,7 @@ def unanswer(spec, key):
 
 
 CONN_FIELDS = ("source", "destination", "protocol", "medium", "topology", "redundancy", "paths", "direction", "scope", "label", "pattern",
-               "via", "nodes", "relation", "links")
+               "via", "nodes", "relation", "links", "display")
 
 
 def connect(spec, **f):
@@ -1681,6 +1681,140 @@ def singular(name):
     return " ".join(words[:-1] + [w])
 
 
+def displayed_units(spec):
+    """(representative-rack flags, record id -> displayed shape ids): one shape per drawn unit; instruments and representative racks
+    are drawn once with their quantity in the caption."""
+    rep_io = {e["id"]: io_representative(spec, e) for e in recs(spec, "io")}
+    shown = {}
+    for e in spec["equipment"]:
+        n = 1 if e["category"] == "instrument" or rep_io.get(e["id"]) else units(e)
+        shown[e["id"]] = ["%s-%d" % (e["id"], i) for i in range(1, n + 1)]
+    return rep_io, shown
+
+
+PRESENTATION_SHAPE = ("image", "image_source", "oem", "model", "image_override", "background", "component", "max_width", "max_height",
+                      "width_weight")
+PRESENTATION_LINE = ("waypoints", "via", "from_side", "to_side", "straight")
+
+
+def merge_previous(d, previous):
+    """Item 12 / C5: carry presentation-only choices (pictures, waypoints, width weights, layer weights, explicit place) from the
+    previous diagram.json into a regenerated one for every shape and line that still exists. Structure (units, parents, rows,
+    captions, quantities, connections) always comes from the specification."""
+    old_shapes = {s["id"]: s for s in previous.get("shapes", [])}
+    kept = 0
+    for sh in d["shapes"]:
+        o = old_shapes.get(sh["id"])
+        if not o:
+            continue
+        for k in PRESENTATION_SHAPE:
+            if k in o and o[k] != sh.get(k):
+                sh[k] = o[k]
+                kept += 1
+        if "place" in o and "place" not in sh:
+            sh["place"] = o["place"]
+    old_lines = {(l.get("from"), l.get("to")): l for l in previous.get("lines", []) if "from" in l}
+    for l in d["lines"]:
+        o = old_lines.get((l.get("from"), l.get("to")))
+        if o:
+            for k in PRESENTATION_LINE:
+                if k in o:
+                    l[k] = o[k]
+                    kept += 1
+    for k in ("layer_weights",):
+        if k in previous:
+            d[k] = previous[k]
+    return kept
+
+
+def verify_diagram(spec, d):
+    """Item 1 / C4 (blocking): the diagram must show exactly what the specification confirms. Checks every unit is drawn once in its
+    layer, quantities in captions, no invented equipment, every drawable logical connection represented (directly, through a bus, a
+    patch panel, a grouped hardwired connection, a chain or a ring), and placement constraints kept. Returns a list of problems."""
+    out = []
+    rep_io, shown = displayed_units(spec)
+    shapes = {s["id"]: s for s in d.get("shapes", [])}
+    lid = {l["key"]: l["id"] for l in spec["layers"]}
+
+    def layer_of(sid):
+        s_ = shapes.get(sid)
+        while s_ is not None and not s_.get("layer") and s_.get("parent"):
+            s_ = shapes.get(s_["parent"])
+        return s_.get("layer") if s_ is not None else None
+    expected = set()
+    for e in spec["equipment"]:
+        for uid in shown[e["id"]]:
+            expected.add(uid)
+            if e["category"] in ("existing_scada", "dcs") and not e.get("quantity"):
+                continue
+            if uid not in shapes:
+                out.append("%s (%s) is in the specification but not drawn" % (uid, e["name"]))
+                continue
+            if layer_of(uid) != lid[e["layer"]]:
+                out.append("%s is drawn in layer %r, the specification puts it in %r" % (uid, layer_of(uid), lid[e["layer"]]))
+        if e["category"] == "instrument" or rep_io.get(e["id"]):
+            sh = shapes.get(shown[e["id"]][0])
+            q = str(e.get("quantity") or "TBC")
+            if sh is not None and q not in str(sh.get("sublabel", "")):
+                out.append("%s: the caption must state the quantity %s" % (shown[e["id"]][0], q))
+    for sid, sh in shapes.items():
+        if re.match(r"EQ-\d+-\d+$", sid) and sid not in expected:
+            out.append("%s is drawn but is not a unit in the specification (invented or stale equipment)" % sid)
+    # connectivity graph of what is drawn
+    adj = {}
+
+    def link(a, b):
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+    for l in d.get("lines", []):
+        if l.get("chain"):
+            for a, b in zip(l["chain"], l["chain"][1:]):
+                link(a, b)
+        elif "from" in l:
+            link(l["from"], l["to"])
+    for r in d.get("rings", []):
+        ns = r.get("nodes", [])
+        for a, b in zip(ns, ns[1:] + ns[:1]):
+            link(a, b)
+    for b in d.get("buses", []):
+        for m in b["members"]:
+            link(b["id"], m)
+    ends = {x for l in d.get("lines", []) for x in ([l.get("from"), l.get("to")] + (l.get("chain") or []))}
+    boxes = {sid for sid, sh in shapes.items() if sh.get("kind") == "group" and sid in ends}   # only boxes a cable ends on
+    for sid, sh in shapes.items():                                   # a cable to such a box reaches the equipment inside it
+        p = sh.get("parent")
+        while p:
+            if p in boxes:
+                link(p, sid)
+            p = shapes.get(p, {}).get("parent")
+    hubs = {b["id"] for b in d.get("buses", [])} | boxes | {sid for sid, sh in shapes.items() if sh.get("category") == "fo_panel"}
+
+    def reachable(a, b):
+        seen, todo = {a}, [a]
+        while todo:
+            x = todo.pop()
+            for y in adj.get(x, ()):
+                if y == b:
+                    return True
+                if y not in seen and y in hubs:                          # pass only through buses, boxes and patch panels
+                    seen.add(y)
+                    todo.append(y)
+        return False
+    for ll in d.get("logical_links", logical_links(spec, shown)):
+        if not ll.get("drawn"):
+            continue
+        for a, b in ll["units"]:
+            if a == b:
+                continue
+            if not reachable(a, b):
+                out.append("%s: %s and %s are connected in the specification but not in the drawing" % (ll["id"], a, b))
+    for eid, cons in ((spec.get("layout") or {}).get("place") or {}).items():
+        sh = shapes.get(shown.get(eid, ["?"])[0])
+        if sh is not None and sh.get("place") != cons:
+            out.append("%s: placement constraint %s is not applied" % (eid, cons))
+    return out
+
+
 def io_representative(spec, e):
     """7.5: show one representative rack (with the total quantity) when that is technically faithful: a star, local backplane or
     unconnected racks. A daisy chain, ring or redundant network shows each rack unless the user chose the simplified display."""
@@ -1695,6 +1829,82 @@ def io_representative(spec, e):
     net = [c for c in conns if c.get("protocol") != "Hardwired AI/DI/AO/DO"]
     return all(c.get("pattern") in ("each-to-first", "first-to-first", "none") and c.get("topology") in (None, "Star", "Local backplane",
                                                                                                          "Point-to-point") for c in net)
+
+
+NETWORK_CATS = {"switch", "router", "firewall", "media_converter", "wireless"}
+
+
+def make_buses(spec, shapes, lines):
+    """Items 4/5: representation, not connectivity. Where three or more devices of one row are each linked to the same switch by the
+    same cable, the drawing shows one network bus (trunk + drops) and a single uplink from the switch, instead of a fan of cables. The
+    logical connections are unchanged (logical_links). spec["layout"]["buses"] = "off" keeps individual cables; a connection with
+    display "point-to-point" is never put on a bus."""
+    if (spec.get("layout") or {}).get("buses") == "off":
+        return lines, []
+    by = {s["id"]: s for s in shapes}
+    keep_p2p = {c["id"] for c in spec["connections"] if c.get("display") in ("point-to-point", "cross", "consolidated")}
+    p2p_units = {u for c in spec["connections"] if c["id"] in keep_p2p for u in (c["source"], c["destination"])}
+    fans = {}
+    for n, l in enumerate(lines):
+        if "from" not in l or l.get("direct") or l.get("label"):
+            continue
+        for hub, dev in ((l["from"], l["to"]), (l["to"], l["from"])):
+            h, d = by.get(hub), by.get(dev)
+            if not h or not d or h.get("category") not in ("switch",) or d.get("category") in NETWORK_CATS:
+                continue
+            if d.get("category") == "instrument" or dev.rsplit("-", 1)[0] in p2p_units:
+                continue
+            fans.setdefault((hub, l["cable"], d.get("parent"), d.get("row")), []).append((n, dev))
+    used, buses = set(), []
+    hubs = sorted({k[0] for k, v in fans.items() if len(v) >= 3})
+    for (hub, cable, parent, row), members in sorted(fans.items()):
+        if len(members) < 3 or any(n in used for n, _ in members):
+            continue
+        letter = "" if len(hubs) == 1 else " " + "ABCDEFGH"[hubs.index(hub)]
+        bus_id = "BUS-" + hub
+        buses.append({"id": bus_id, "members": [dev for _, dev in members], "cable": cable,
+                      "label": "Network%s" % letter})
+        used |= {n for n, _ in members}
+        lines.append({"from": hub, "to": bus_id, "cable": cable})
+    return [l for n, l in enumerate(lines) if n not in used], buses
+
+
+def logical_links(spec, shown):
+    """What must be connected, whatever the drawing shows: one entry per connection with its unit pairs (or ring nodes)."""
+    out = []
+    for c in spec["connections"]:
+        a, b = c["source"], c["destination"]
+        ua = shown.get(a) or ["%s-1" % a]
+        ub = shown.get(b) or ["%s-1" % b]
+        if c.get("pattern") == "none":
+            continue
+        if c.get("pattern") == "ring" and c.get("nodes"):
+            units = [[(shown.get(x) or ["%s-1" % x])[0], (shown.get(y) or ["%s-1" % y])[0]] for x, y in zip(c["nodes"], c["nodes"][1:])]
+        elif c.get("pattern") == "pair":
+            units = [[ua[0], ua[1]]] if len(ua) > 1 else []
+        elif c.get("pattern") == "links":
+            units = [[ua[min(x, len(ua)) - 1], ub[min(y, len(ub)) - 1]] for x, y in c.get("links") or []]
+        elif c.get("pattern") == "all-to-all":
+            units = [[x, y] for x in ua for y in ub]
+        elif c.get("pattern") == "each-to-one":
+            units = [[x, ub[0]] for x in ua]
+        elif c.get("pattern") in ("each-to-first", "chain", "ring"):
+            units = [[ua[0], y] for y in ub] if c.get("pattern") == "each-to-first" else [[ua[0], ub[0]]]
+        else:
+            units = [[ua[0], ub[0]]]
+        cab, _ = cable_type(c)
+        out.append({"id": c["id"], "units": units, "cable": cab, "pattern": c.get("pattern"), "drawn": cab is not None})
+    return out
+
+
+def io_topology_text(spec, e):
+    """The I/O network topology of a rack record in words, for a representative rack's caption (e.g. "Daisy-chain")."""
+    for c in spec["connections"]:
+        if e["id"] in (c["source"], c["destination"]) and c.get("protocol") != "Hardwired AI/DI/AO/DO" and c.get("topology"):
+            if c.get("redundancy") == "Redundant network" and c["topology"] != "Ring":
+                return "Dual redundant network"
+            return {"Star": "", "Local backplane": "", "Point-to-point": ""}.get(c["topology"], c["topology"])
+    return ""
 
 
 def unit_ids(e):
@@ -1743,11 +1953,7 @@ def to_diagram(spec):
             shapes.append(g)
         return gid
 
-    rep_io = {e["id"]: io_representative(spec, e) for e in recs(spec, "io")}
-    shown = {}                                                         # record id -> displayed shape ids (one per drawn unit)
-    for e in spec["equipment"]:
-        n = 1 if e["category"] == "instrument" or rep_io.get(e["id"]) else units(e)
-        shown[e["id"]] = ["%s-%d" % (e["id"], i) for i in range(1, n + 1)]
+    rep_io, shown = displayed_units(spec)
 
     def disp(eid, i=1):
         ids = shown.get(eid) or ["%s-1" % eid]
@@ -1773,8 +1979,9 @@ def to_diagram(spec):
         place = {}
         if lay == "field" or cat == "instrument" and lay not in ("control",):
             # 7.7: one field-instrument arrangement (not one box per PLC); its border is where the representative cable starts.
+            # the layer heading already names the field layer, so the Avanceon instrument box carries no repeated title
             parent = group("G-FIELD" + ("-other" if scope == "other" else ""), lay,
-                           "Field Instruments" + (" (Client Scope)" if scope == "other" else ""), scope=scope)
+                           "Client Scope" if scope == "other" else "", scope=scope)
         elif lay == "control":
             group(root, lay, "", frame=False)
             if scope == "other":
@@ -1795,10 +2002,11 @@ def to_diagram(spec):
             parent = group("G-OTHER-" + lay, lay, "Client / Existing Scope", scope="other")
         else:
             parent = group(root, lay, "", frame=False)                 # 7.4: Avanceon equipment sits directly in its layer
+            place = {"row": 1 if cat in NETWORK_CATS else 0}             # item 3: functional rows (endpoints above, network below)
         cid = component_for(e, known)
         ids = shown[e["id"]]
         for i, uid in enumerate(ids, 1):
-            sh = {"id": uid, "parent": parent, "label": singular(e["name"]) if len(ids) > 1 else e["name"]}
+            sh = {"id": uid, "parent": parent, "label": singular(e["name"]) if len(ids) > 1 else e["name"], "category": cat}
             sh.update(place)
             if cat == "instrument":
                 sh["label"] = e["name"]
@@ -1806,6 +2014,9 @@ def to_diagram(spec):
             elif rep_io.get(e["id"]):
                 sh["label"] = e["name"]
                 sh["sublabel"] = "Qty: %s" % (e["quantity"] if e.get("quantity") else "TBC")
+                topo = io_topology_text(spec, e)
+                if topo:
+                    sh["sublabel"] += " \u00b7 " + topo
             elif is_pair(e) and len(ids) == 2:
                 sh["sublabel"] = "(Primary)" if i == 1 else ("(Secondary)" if cat in CONTROLLERS else "(Standby)")
             elif len(ids) > 1:
@@ -1845,16 +2056,11 @@ def to_diagram(spec):
             common["label"] = c["label"]
         rep = rep_io.get(b["id"]) and units(b) > 1
         if rep and c.get("pattern") in ("chain", "ring", "each-to-first", "all-to-all", "links"):
-            # 7.5 simplified display: a link from each source unit to the representative rack, the real topology written on it.
-            topo = "Dual redundant network" if c.get("redundancy") == "Redundant network" and c.get("topology") != "Ring" else \
-                c.get("topology") or "I/O network"
-            common["label"] = "%s \u2014 %d racks" % (topo, units(b))
+            # 7.5 simplified display: a link from each source unit to the representative rack; the real topology is written in the
+            # rack's caption (always readable, independent of routing) and kept in full in the specification.
             srcs = shown[a["id"]] if c.get("pattern") == "all-to-all" else [disp(a["id"])]
-            for n_, x in enumerate(srcs):
-                ln = dict(common, **{"from": x, "to": disp(b["id"])})
-                if n_:
-                    ln.pop("label", None)                             # the topology is written once
-                lines.append(ln)
+            for x in srcs:
+                lines.append(dict(common, **{"from": x, "to": disp(b["id"])}))
             continue
         if c.get("pattern") == "ring":
             nodes = c.get("nodes") or ([a["id"]] + [b["id"]])
@@ -1920,7 +2126,16 @@ def to_diagram(spec):
         if key not in seen:
             seen.add(key)
             uniq.append(l)
+    for eid, cons in ((spec.get("layout") or {}).get("place") or {}).items():   # item 3: user-confirmed relative placement
+        target = next((x for x in shapes if x["id"] == shown.get(eid, ["?"])[0]), None)
+        if target is not None:
+            target["place"] = {k: shown.get(v, [v])[0] for k, v in cons.items()}
+            cons.update(target["place"]) if False else None
+    uniq, buses = make_buses(spec, shapes, uniq)
     d["shapes"], d["lines"] = shapes, uniq
+    if buses:
+        d["buses"] = buses
+    d["logical_links"] = logical_links(spec, shown)
     if rings:
         d["rings"] = rings
     for i in issues:
@@ -2073,6 +2288,8 @@ def main(argv=None):
     s.add_argument("id")
     for k in ("protocol", "medium", "topology", "redundancy", "paths", "direction", "scope", "label", "pattern", "via", "nodes"):
         s.add_argument("--" + k)
+    s.add_argument("--display", choices=["auto", "point-to-point", "bus", "cross", "chain", "ring", "consolidated"],
+                   help="graphical representation only; the logical connection is unchanged")
     s.add_argument("--from", dest="source")
     s.add_argument("--to", dest="destination")
     s = sub.add_parser("remove-connection")
@@ -2090,6 +2307,7 @@ def main(argv=None):
     s = sub.add_parser("layout")
     s.add_argument("spec")
     s.add_argument("--io-display", choices=["auto", "representative", "individual"])
+    s.add_argument("--buses", choices=["auto", "off"], help="off: draw every network link as its own cable (no common bus)")
     s = sub.add_parser("stage")
     s.add_argument("spec")
     s.add_argument("name", choices=["project", "layers", "equipment", "connectivity", "review", "generated", "modify"])
@@ -2113,6 +2331,16 @@ def main(argv=None):
     s.add_argument("spec")
     s.add_argument("--out", required=True)
     s.add_argument("--allow-errors", action="store_true")
+    s.add_argument("--previous", help="previous diagram.json: keep its pictures, waypoints and width/layer weights (revisions)")
+    s = sub.add_parser("verify-diagram")
+    s.add_argument("spec")
+    s.add_argument("diagram")
+    s = sub.add_parser("place")
+    s.add_argument("spec")
+    s.add_argument("id")
+    s.add_argument("--left-of")
+    s.add_argument("--right-of")
+    s.add_argument("--clear", action="store_true")
     a = ap.parse_args(argv)
     try:
         return run(a)
@@ -2199,10 +2427,35 @@ def run(a):
         eq(spec, a.id)
         spec.setdefault("images", {})[a.id] = {k: getattr(a, k) for k in ("image", "image_source", "oem", "model") if getattr(a, k)}
         log(spec, "image", a.id)
+    elif a.cmd == "verify-diagram":
+        with open(a.diagram, encoding="utf-8") as fh:
+            problems = verify_diagram(spec, json.load(fh))
+        for p_ in problems:
+            print("MISMATCH: " + p_)
+        print("diagram matches the specification" if not problems else "%d mismatch(es): the diagram does not show the confirmed "
+              "specification; regenerate it with to-diagram (presentation edits only)" % len(problems))
+        return 1 if problems else 0
+    elif a.cmd == "place":
+        eq(spec, a.id)
+        places = spec.setdefault("layout", {}).setdefault("place", {})
+        if a.clear:
+            places.pop(a.id, None)
+        else:
+            cons = {k: v for k, v in (("left_of", a.left_of), ("right_of", a.right_of)) if v}
+            for v in cons.values():
+                other = eq(spec, v)
+                if other["layer"] != eq(spec, a.id)["layer"]:
+                    raise SpecError("%s and %s are in different layers; left_of / right_of order equipment within one layer" % (a.id, v))
+            places[a.id] = cons
+        log(spec, "place", "%s %s" % (a.id, places.get(a.id)))
+        print(json.dumps(places.get(a.id) or {}))
     elif a.cmd == "layout":
         if a.io_display:
             spec.setdefault("layout", {})["io_display"] = None if a.io_display == "auto" else a.io_display
             log(spec, "layout", "io_display=%s" % a.io_display)
+        if a.buses:
+            spec.setdefault("layout", {})["buses"] = None if a.buses == "auto" else a.buses
+            log(spec, "layout", "buses=%s" % a.buses)
         print(json.dumps(spec.get("layout", {})))
     elif a.cmd == "stage":
         spec["stage"] = a.name
@@ -2263,6 +2516,10 @@ def run(a):
         print("applied %d change(s); %s rewritten from the specification" % (len(changes), a.request))
     elif a.cmd == "to-diagram":
         d, warnings = to_diagram(spec)
+        if a.previous:
+            with open(a.previous, encoding="utf-8") as fh:
+                kept = merge_previous(d, json.load(fh))
+            print("kept %d presentation choice(s) from %s" % (kept, a.previous))
         errs = [w for w in warnings if w.startswith("ERROR")]
         for w in warnings:
             print(("" if w.startswith("ERROR") else "warning: ") + w)

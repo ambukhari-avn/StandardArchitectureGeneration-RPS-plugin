@@ -8,7 +8,7 @@
       "name": "architecture-diagram",
       "source": "./",
       "description": "Editable A3 Visio architecture diagrams with a fixed footer and cable colours.",
-      "version": "1.7.1"
+      "version": "1.7.2"
     }
   ]
 }
